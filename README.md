@@ -1,14 +1,34 @@
-﻿# MTCode
+# MTCode
 
-Win7-first offline desktop code editor.
+Desktop code editor for PLC programming (Mechatronika VMB630).
+Built with Tauri + React + Monaco Editor. Targets Windows 7+, works fully offline.
 
-## Bootstrap status
-- React + Vite shell created
-- Tauri backend skeleton created
-- NSIS target configured
-- WebView2 fixed runtime path placeholder configured
+## Features
 
-## Next
-1. Add arch-specific packaging profiles for x64/x86.
-2. Implement Rust commands for file open/save and project open.
-3. Add typed IPC bridge in frontend.
+- PLC syntax highlighting with rainbow block nesting
+- File and project tree with lazy directory loading
+- Project-wide search with streaming results
+- Find & Replace in file
+- Bookmarks with glyph margin indicators
+- Multi-encoding support: UTF-8, UTF-8 BOM, ANSI (Windows-1251), UCS-2 LE/BE
+- Autosave (off / on focus change / delayed)
+- Themes: Monokai, MTCode (Mahogany/Linen), Norton
+
+## Stack
+
+- **Frontend:** React, TypeScript, Monaco Editor, Tailwind CSS
+- **Backend:** Rust (Tauri), encoding_rs
+- **Build:** Vite, NSIS installer, bundled WebView2 runtime
+
+## Dev
+
+```
+npm install
+npm run tauri dev
+```
+
+## Build
+
+```
+npm run tauri build
+```
