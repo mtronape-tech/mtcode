@@ -1,0 +1,20 @@
+{
+  "background":             "240 100% 33%",
+  "foreground":             "0 0% 100%",
+  "card":                   "0 0% 66%",
+  "card-foreground":        "240 100% 18%",
+  "border":                 "180 100% 67%",
+  "input":                  "0 0% 58%",
+  "primary":                "180 100% 67%",
+  "primary-foreground":     "240 100% 12%",
+  "secondary":              "240 100% 25%",
+  "secondary-foreground":   "0 0% 100%",
+  "muted":                  "0 0% 58%",
+  "muted-foreground":       "0 0% 85%",
+  "accent":                 "180 100% 67%",
+  "accent-foreground":      "240 100% 12%",
+  "destructive":            "0 70% 45%",
+  "destructive-foreground": "0 0% 100%",
+  "ring":                   "180 100% 67%",
+  "radius":                 "0px"
+}

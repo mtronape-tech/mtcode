@@ -1,0 +1,20 @@
+{
+  "background": "18 65% 5%",
+  "foreground": "36 32% 82%",
+  "card": "18 58% 9%",
+  "card-foreground": "36 32% 82%",
+  "border": "16 42% 22%",
+  "input": "18 60% 7%",
+  "primary": "34 42% 62%",
+  "primary-foreground": "18 65% 5%",
+  "secondary": "20 55% 14%",
+  "secondary-foreground": "34 42% 62%",
+  "muted": "20 55% 12%",
+  "muted-foreground": "28 22% 64%",
+  "accent": "27 40% 42%",
+  "accent-foreground": "36 32% 82%",
+  "destructive": "0 52% 32%",
+  "destructive-foreground": "36 32% 82%",
+  "ring": "27 40% 42%",
+  "radius": "0px"
+}

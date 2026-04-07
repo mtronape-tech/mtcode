@@ -1,0 +1,410 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ── Default theme variables (Mahogany — dark) ───────────────────────────── */
+  :root {
+    --background: 18 65% 5%;
+    --foreground: 36 32% 82%;
+    --card: 18 58% 9%;
+    --card-foreground: 36 32% 82%;
+    --border: 16 42% 22%;
+    --input: 18 60% 7%;
+    --primary: 34 42% 62%;
+    --primary-foreground: 18 65% 5%;
+    --secondary: 20 55% 14%;
+    --secondary-foreground: 34 42% 62%;
+    --muted: 20 55% 12%;
+    --muted-foreground: 28 22% 64%;
+    --accent: 27 40% 42%;
+    --accent-foreground: 36 32% 82%;
+    --destructive: 0 52% 32%;
+    --destructive-foreground: 36 32% 82%;
+    --ring: 27 40% 42%;
+    --radius: 0px;
+  }
+
+  * {
+    @apply box-border border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply w-full h-full m-0 p-0;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--ui-font, "JetBrains Mono", "Consolas", monospace);
+    font-size: 12px;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+
+  button {
+    @apply cursor-pointer;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-1 ring-ring ring-offset-0;
+  }
+}
+
+/* ── Monaco editor overrides ─────────────────────────────────────────────── */
+.editor-host {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-host .monaco-editor,
+.editor-host .monaco-editor-background,
+.editor-host .monaco-editor .margin,
+.editor-host .monaco-editor .monaco-scrollable-element {
+  background-color: hsl(var(--background)) !important;
+}
+
+.editor-host .monaco-editor .view-lines,
+.editor-host .monaco-editor .current-line,
+.editor-host .monaco-editor .margin-view-overlays,
+.editor-host .monaco-editor .monaco-editor-background {
+  background: transparent !important;
+}
+
+/* ── Monaco scrollbar — pixel-exact match to .themed-scrollbar ───────────── */
+/*
+ * themed-scrollbar: 8px track, thumb = 4px (border: 2px transparent each side)
+ * Monaco slider must replicate this with explicit margin.
+ */
+
+/* Vertical track — same 8px width */
+.editor-host .monaco-scrollable-element > .scrollbar.vertical {
+  width: 8px !important;
+  background: transparent !important;
+}
+
+/* Vertical thumb — 4px wide, centered (2px margin each side) */
+.editor-host .monaco-scrollable-element > .scrollbar.vertical > .slider {
+  width: 4px !important;
+  left: 2px !important;
+  right: 2px !important;
+  border-radius: 0 !important;
+  background: hsl(var(--border)) !important;
+}
+
+.editor-host .monaco-scrollable-element > .scrollbar.vertical > .slider:hover {
+  background: hsl(var(--muted-foreground) / 0.5) !important;
+}
+
+/* Horizontal track — same 8px height */
+.editor-host .monaco-scrollable-element > .scrollbar.horizontal {
+  height: 8px !important;
+  background: transparent !important;
+}
+
+/* Horizontal thumb — 4px tall, centered */
+.editor-host .monaco-scrollable-element > .scrollbar.horizontal > .slider {
+  height: 4px !important;
+  top: 2px !important;
+  border-radius: 0 !important;
+  background: hsl(var(--border)) !important;
+}
+
+.editor-host .monaco-scrollable-element > .scrollbar.horizontal > .slider:hover {
+  background: hsl(var(--muted-foreground) / 0.5) !important;
+}
+
+/* ── Menu drop-in animation ──────────────────────────────────────────────── */
+@keyframes menuDropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menu-dropdown-anim {
+  animation: menuDropIn 120ms ease-out;
+}
+
+/* ── Dot-grid texture (used in project tree) ─────────────────────────────── */
+.tree-dotgrid {
+  background-image: radial-gradient(circle, hsl(var(--muted-foreground) / 0.14) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+/* ── Scrollbar hide utility ──────────────────────────────────────────────── */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ── Themed scrollbar (matches Monaco style) ─────────────────────────────── */
+.themed-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.themed-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.themed-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.themed-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  border-radius: 0;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.themed-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+.themed-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Norton Commander theme skin ─────────────────────────────────────────────
+   Covers both norton-dark and norton-light via [data-theme^="norton"].
+   Design goal: DOS/VGA feel — blocky font, cyan panel-header strips,
+   full-block tab selection, double-rule borders, F-key bar at the bottom.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* 1 ── Font: Courier New is pre-installed on all Windows systems and gives
+        the closest feel to the IBM VGA OEM bitmap font used by NC 5.           */
+[data-theme^="norton"] {
+  --ui-font: "Courier New", "Lucida Console", "Courier", monospace;
+}
+
+/* 2 ── Sidebar panel header: NC inverted-color header strip.
+        The aside has p-2 (8px padding all sides). Negative margins + calc-width
+        "escape" the padding so the strip fills the full border-box width.       */
+[data-theme^="norton"] [data-nc-header] {
+  background-color: hsl(var(--primary));
+  color:            hsl(var(--primary-foreground));
+  margin: -8px -8px 0 -8px;
+  padding: 0 10px;
+  min-height: 29px;          /* match EditorTabs height (28px + 1px border)  */
+  width: calc(100% + 16px);
+  border-bottom: 1px solid hsl(var(--primary-foreground) / 0.25);
+  display: flex !important;  /* override so align-items works correctly       */
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+/* All children of the NC header inherit the inverted colors */
+[data-theme^="norton"] [data-nc-header],
+[data-theme^="norton"] [data-nc-header] * {
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+/* Header icon-buttons: NC-style transparent with light border */
+[data-theme^="norton"] [data-nc-header] button {
+  background: transparent !important;
+  border-color: hsl(var(--primary-foreground) / 0.3) !important;
+}
+[data-theme^="norton"] [data-nc-header] button:hover {
+  background-color: hsl(var(--primary-foreground) / 0.18) !important;
+  border-color:     hsl(var(--primary-foreground) / 0.6) !important;
+}
+
+/* 3 ── Sidebar background: NC panels are blue (background), not gray (card) */
+[data-theme^="norton"] aside {
+  background-color: hsl(var(--background)) !important;
+  /* Inset border on left/top/bottom only — right edge is the resize handle */
+  box-shadow:
+    inset  1px  0   0 0 hsl(var(--border) / 0.5),
+    inset  0    1px 0 0 hsl(var(--border) / 0.5),
+    inset  0   -1px 0 0 hsl(var(--border) / 0.5);
+}
+
+/* 3b ── Resize handle: bg matches sidebar so no stripe appears.
+         All themes: bg-card by default. Norton: bg-background (blue).          */
+.sidebar-resize-handle {
+  background-color: hsl(var(--card));
+}
+[data-theme^="norton"] .sidebar-resize-handle {
+  background-color: hsl(var(--background)) !important;
+}
+
+/* 4 ── Tab bar background: secondary color (NC "inactive panel" shade)          */
+[data-theme^="norton"] [role="tablist"] {
+  background-color: hsl(var(--secondary));
+}
+
+/* 5 ── Active tab: full-block highlight, no top-accent line — pure NC style     */
+[data-theme^="norton"] [role="tab"][aria-selected="true"] {
+  background-color: hsl(var(--primary))            !important;
+  color:            hsl(var(--primary-foreground)) !important;
+  border-top-color: transparent                    !important;
+}
+
+/* 6 ── Inactive tabs: secondary-foreground, no background                       */
+[data-theme^="norton"] [role="tab"]:not([aria-selected="true"]) {
+  color: hsl(var(--secondary-foreground) / 0.80);
+  background-color: transparent;
+}
+[data-theme^="norton"] [role="tab"]:not([aria-selected="true"]):hover {
+  background-color: hsl(var(--secondary-foreground) / 0.10) !important;
+  color:            hsl(var(--secondary-foreground))         !important;
+}
+
+/* 7 ── Status bar: dark background, double-rule top border                      */
+[data-theme^="norton"] footer {
+  background-color: hsl(var(--background))  !important;
+  border-top-style: double                  !important;
+  border-top-width: 3px                     !important;
+}
+
+/* 8 ── Menus: no border-radius, sharper NC appearance                           */
+[data-theme^="norton"] .menu-dropdown-anim {
+  border-radius: 0 !important;
+}
+
+/* 9 ── NC Settings dialog: override all CSS vars so the gray card renders with
+        dark blue text, and the inner bg-background (category sidebar) also
+        gets a slightly darker gray — not the NC blue.                           */
+[data-theme^="norton"] [data-nc-dialog] {
+  --background:       0   0% 54%;   /* category sidebar → darker gray, not blue */
+  --foreground:       240 100% 14%;
+  --muted-foreground: 240  65% 28%;
+  --border:           0   0% 44%;
+  --ring:             240  52% 50%;
+  --input:            0   0% 52%;
+  --accent:           240  52% 50%;
+  --accent-foreground:0   0% 100%;
+  color: hsl(var(--foreground));
+}
+
+/* 9b ── NC Sidebar: remove gap between header strip and tree content.
+         aside gap-2 = 8px, tree panel py-[3px] = 3px → both must be zeroed.   */
+[data-theme^="norton"] aside {
+  gap: 0 !important;
+}
+[data-theme^="norton"] aside > .themed-scrollbar {
+  padding-top: 0 !important;
+}
+
+/* 10 ── F-key bar (all themes) ──────────────────────────────────────────────── */
+.nc-fkeys {
+  display: flex;
+  /* height controlled by grid row (20px) — no explicit height here */
+  overflow: hidden;
+  background-color: hsl(var(--card));
+}
+
+.nc-fkey-btn {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  border: none;
+  background: transparent;
+  padding: 0;
+  min-width: 0;
+  cursor: pointer;
+  border-right: 1px solid hsl(var(--border) / 0.35);
+  transition: background-color 80ms;
+}
+.nc-fkey-btn:last-child { border-right: none; }
+.nc-fkey-btn:hover { background-color: hsl(var(--accent) / 0.10); }
+
+/* Base (MTCode/Linen): subtle monochrome — F-number in muted, label dimmed     */
+.nc-fkey-num {
+  background-color: transparent;
+  color: hsl(var(--muted-foreground) / 0.65);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 0 2px 0 4px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.nc-fkey-label {
+  color: hsl(var(--muted-foreground));
+  font-family: inherit;
+  font-size: 10px;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Norton override: NC-authentic colored badge + full-width label                */
+[data-theme^="norton"] .nc-fkeys {
+  background-color: hsl(var(--background));
+}
+[data-theme^="norton"] .nc-fkey-btn {
+  border-right-color: hsl(var(--border) / 0.5);
+}
+[data-theme^="norton"] .nc-fkey-btn:hover {
+  background-color: hsl(var(--accent) / 0.18);
+}
+[data-theme^="norton"] .nc-fkey-num {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-weight: bold;
+  padding: 0 3px;
+}
+[data-theme^="norton"] .nc-fkey-label {
+  color: hsl(var(--foreground));
+}
+
+/* NC scrollbars: square thumbs instead of round                                 */
+[data-theme^="norton"] .themed-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 0;
+}
+[data-theme^="norton"] .themed-scrollbar {
+  scrollbar-width: thin;
+}
+
+/* ── PLC Rainbow Block Highlight ─────────────────────────────────────────────
+   Default palette is set here; JavaScript overrides via style.setProperty()
+   when the user changes colors in Settings → Language.
+   !important is required to override Monaco's token colorization (mtkN rules).
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --plc-rb-0: #FF5F5F;
+  --plc-rb-1: #FF9F43;
+  --plc-rb-2: #FFD700;
+  --plc-rb-3: #5FFF7A;
+  --plc-rb-4: #5FE8FF;
+  --plc-rb-5: #5F9FFF;
+  --plc-rb-6: #C17FFF;
+  --plc-rb-7: #FF5FD0;
+  --plc-rb-8: #FF9067;
+  --plc-rb-9: #5FFFCF;
+}
+
+.plc-rb-0 { color: var(--plc-rb-0) !important; }
+.plc-rb-1 { color: var(--plc-rb-1) !important; }
+.plc-rb-2 { color: var(--plc-rb-2) !important; }
+.plc-rb-3 { color: var(--plc-rb-3) !important; }
+.plc-rb-4 { color: var(--plc-rb-4) !important; }
+.plc-rb-5 { color: var(--plc-rb-5) !important; }
+.plc-rb-6 { color: var(--plc-rb-6) !important; }
+.plc-rb-7 { color: var(--plc-rb-7) !important; }
+.plc-rb-8 { color: var(--plc-rb-8) !important; }
+.plc-rb-9 { color: var(--plc-rb-9) !important; }
