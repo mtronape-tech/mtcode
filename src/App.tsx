@@ -498,7 +498,14 @@ export function App() {
 
   // ── Edit operations using Monaco editor commands ──────────────────────────────
   const editorCommand = (cmd: string) => {
-    editorRef.current?.trigger("menu", cmd, null);
+    const ed = editorRef.current;
+    if (!ed) return;
+    try {
+      ed.focus();
+      ed.trigger("menu", cmd, null);
+    } catch {
+      // Ignore unsupported commands (e.g. fold on plain-text files)
+    }
   };
 
   const transformSelection = (fn: (text: string) => string) => {
@@ -1447,7 +1454,8 @@ export function App() {
 
     // Re-run when the model is swapped (tab switch)
     editor.onDidChangeModel(() => {
-      rainbowDecorRef.current = null; // reset collection — belongs to old model
+      rainbowDecorRef.current = null;   // reset — belongs to old model
+      bookmarkDecorRef.current = null;  // reset — belongs to old model
       updateRainbowDecorations(editor);
       updateBookmarkDecorations();
     });
