@@ -224,7 +224,7 @@ export function App() {
   const [fkeyActions, setFkeyActions] = useState<(string | null)[]>(FKEY_DEFAULT_ACTIONS);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkMap>(new Map());
-  const bookmarkDecorRef = useRef<import("monaco-editor").editor.IEditorDecorationsCollection | null>(null);
+  const bookmarkDecorRef = useRef<string[]>([]);
 
   const [openMenu, setOpenMenu] = useState<MenuKey | null>(null);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState<number>(-1);
@@ -265,8 +265,8 @@ export function App() {
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const projectSearchInputRef = useRef<HTMLInputElement | null>(null);
   const sidebarResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
-  // PLC rainbow decoration collection (persists across content changes)
-  const rainbowDecorRef = useRef<import("monaco-editor").editor.IEditorDecorationsCollection | null>(null);
+  // PLC rainbow decoration IDs (deltaDecorations pattern — safer than IEditorDecorationsCollection)
+  const rainbowDecorRef = useRef<string[]>([]);
 
   // ── Recent files ─────────────────────────────────────────────────────────────
   const pushRecentFile = (path: string) => {
@@ -413,10 +413,7 @@ export function App() {
   // ── Bookmarks ─────────────────────────────────────────────────────────────────
   const updateBookmarkDecorations = () => {
     const ed = editorRef.current;
-    if (!ed) return;
-    if (!bookmarkDecorRef.current) {
-      bookmarkDecorRef.current = ed.createDecorationsCollection([]);
-    }
+    if (!ed || !ed.getModel()) return;
     const path = activeTab?.path ?? "";
     const lines = bookmarks.get(path) ?? new Set<number>();
     const decors = Array.from(lines).map((ln) => ({
@@ -428,7 +425,11 @@ export function App() {
         overviewRuler: { color: "hsl(var(--primary))", position: 4 },
       },
     }));
-    bookmarkDecorRef.current.set(decors);
+    try {
+      bookmarkDecorRef.current = ed.deltaDecorations(bookmarkDecorRef.current, decors);
+    } catch {
+      bookmarkDecorRef.current = [];
+    }
   };
 
   const toggleBookmarkAtLine = (line: number) => {
@@ -1404,17 +1405,14 @@ export function App() {
   const updateRainbowDecorations = (editor: import("monaco-editor").editor.IStandaloneCodeEditor) => {
     const model = editor.getModel();
     if (!model) return;
-    // Initialize collection once
-    if (!rainbowDecorRef.current) {
-      rainbowDecorRef.current = editor.createDecorationsCollection([]);
+    const next = (!plcRainbowEnabledRef.current || model.getLanguageId() !== PLC_LANGUAGE_ID)
+      ? []
+      : createRainbowDecorations(parseRainbowBlocks(model.getValue()));
+    try {
+      rainbowDecorRef.current = editor.deltaDecorations(rainbowDecorRef.current, next);
+    } catch {
+      rainbowDecorRef.current = [];
     }
-    if (!plcRainbowEnabledRef.current || model.getLanguageId() !== PLC_LANGUAGE_ID) {
-      rainbowDecorRef.current.clear();
-      return;
-    }
-    const text = model.getValue();
-    const matches = parseRainbowBlocks(text);
-    rainbowDecorRef.current.set(createRainbowDecorations(matches));
   };
 
   const onEditorMount: OnMount = (editor, monaco) => {
@@ -1467,8 +1465,8 @@ export function App() {
 
     // Re-run when the model is swapped (tab switch)
     editor.onDidChangeModel(() => {
-      rainbowDecorRef.current = null;   // reset — belongs to old model
-      bookmarkDecorRef.current = null;  // reset — belongs to old model
+      rainbowDecorRef.current = [];   // IDs from old model are now invalid
+      bookmarkDecorRef.current = [];  // IDs from old model are now invalid
       updateRainbowDecorations(editor);
       updateBookmarkDecorations();
     });
