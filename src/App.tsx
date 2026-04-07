@@ -1419,16 +1419,21 @@ export function App() {
     editorRef.current = editor;
     setEditorMountVersion((v) => v + 1);
 
-    // Override Monaco's built-in command palette (F1 / Ctrl+Shift+P) with our own
-    editor.addAction({
-      id: "editor.action.quickCommand",
-      label: "Command Palette",
-      keybindings: [
-        monaco.KeyCode.F1,
-        monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP,
-      ],
-      run: () => { editorActionsRef.current.openCommandPalette(); },
+    // Remove Monaco's default F1 / Ctrl+Shift+P keybindings for quickCommand,
+    // then attach our own handlers. The "-actionId" prefix is the official
+    // Monaco API for removing a built-in keybinding.
+    try {
+      const kbs = (editor as unknown as { _standaloneKeybindingService: { addDynamicKeybinding: (id: string, k: undefined, h: () => void) => void } })
+        ._standaloneKeybindingService;
+      kbs.addDynamicKeybinding("-editor.action.quickCommand", undefined, () => {});
+    } catch { /* ignore if internal API changes */ }
+    editor.addCommand(monaco.KeyCode.F1, () => {
+      editorActionsRef.current.openCommandPalette();
     });
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP,
+      () => { editorActionsRef.current.openCommandPalette(); },
+    );
 
     // ── Disable Monaco's built-in find widget ──
     editor.updateOptions({
