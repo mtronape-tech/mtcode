@@ -1421,14 +1421,16 @@ export function App() {
     editorRef.current = editor;
     setEditorMountVersion((v) => v + 1);
 
-    // Intercept Monaco's own F1 / Ctrl+Shift+P command palette
-    editor.addCommand(monaco.KeyCode.F1, () => {
-      editorActionsRef.current.openCommandPalette();
+    // Override Monaco's built-in command palette (F1 / Ctrl+Shift+P) with our own
+    editor.addAction({
+      id: "editor.action.quickCommand",
+      label: "Command Palette",
+      keybindings: [
+        monaco.KeyCode.F1,
+        monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP,
+      ],
+      run: () => { editorActionsRef.current.openCommandPalette(); },
     });
-    editor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP,
-      () => { editorActionsRef.current.openCommandPalette(); },
-    );
 
     // ── Disable Monaco's built-in find widget ──
     editor.updateOptions({
