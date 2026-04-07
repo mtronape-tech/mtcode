@@ -241,6 +241,7 @@ export function App() {
     openProjectSearchPanel: (_query?: string) => {},
     navigateFind: (_dir: 1 | -1) => {},
     closeSearchTabs: () => {},
+    toggleBookmarkAtLine: (_line: number) => {},
     searchPanelOpen: false,
     searchMode: "file" as SearchMode,
   });
@@ -419,6 +420,18 @@ export function App() {
       },
     }));
     bookmarkDecorRef.current.set(decors);
+  };
+
+  const toggleBookmarkAtLine = (line: number) => {
+    const path = tabsRef.current.find((t) => t.id === activeTabId)?.path ?? "";
+    if (!path) return;
+    setBookmarks((prev) => {
+      const next = new Map(prev);
+      const set = new Set(next.get(path) ?? []);
+      if (set.has(line)) set.delete(line); else set.add(line);
+      next.set(path, set);
+      return next;
+    });
   };
 
   const toggleBookmark = () => {
@@ -1271,6 +1284,7 @@ export function App() {
   editorActionsRef.current.openProjectSearchPanel = openProjectSearchPanel;
   editorActionsRef.current.navigateFind = navigateFind;
   editorActionsRef.current.closeSearchTabs = closeSearchTabs;
+  editorActionsRef.current.toggleBookmarkAtLine = toggleBookmarkAtLine;
   editorActionsRef.current.searchPanelOpen = searchPanelOpen;
   editorActionsRef.current.searchMode = searchMode;
 
@@ -1309,6 +1323,14 @@ export function App() {
     if (pos) setCursorText(`Ln ${pos.lineNumber}, Col ${pos.column}`);
     editor.onDidChangeCursorPosition((event) => {
       setCursorText(`Ln ${event.position.lineNumber}, Col ${event.position.column}`);
+    });
+
+    // Click on line number → toggle bookmark
+    editor.onMouseDown((e) => {
+      // MouseTargetType.GUTTER_LINE_NUMBERS = 3
+      if (e.target.type === 3 && e.target.position) {
+        editorActionsRef.current.toggleBookmarkAtLine(e.target.position.lineNumber);
+      }
     });
 
     // Initial rainbow pass
