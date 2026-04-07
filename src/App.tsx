@@ -250,6 +250,7 @@ export function App() {
     navigateFind: (_dir: 1 | -1) => {},
     closeSearchTabs: () => {},
     toggleBookmarkAtLine: (_line: number) => {},
+    openCommandPalette: () => {},
     searchPanelOpen: false,
     searchMode: "file" as SearchMode,
   });
@@ -1384,6 +1385,7 @@ export function App() {
   editorActionsRef.current.navigateFind = navigateFind;
   editorActionsRef.current.closeSearchTabs = closeSearchTabs;
   editorActionsRef.current.toggleBookmarkAtLine = toggleBookmarkAtLine;
+  editorActionsRef.current.openCommandPalette = () => setTimeout(() => setCommandPaletteOpen(true), 0);
   editorActionsRef.current.searchPanelOpen = searchPanelOpen;
   editorActionsRef.current.searchMode = searchMode;
 
@@ -1415,9 +1417,18 @@ export function App() {
     rainbowDecorRef.current.set(createRainbowDecorations(matches));
   };
 
-  const onEditorMount: OnMount = (editor) => {
+  const onEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     setEditorMountVersion((v) => v + 1);
+
+    // Intercept Monaco's own F1 / Ctrl+Shift+P command palette
+    editor.addCommand(monaco.KeyCode.F1, () => {
+      editorActionsRef.current.openCommandPalette();
+    });
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP,
+      () => { editorActionsRef.current.openCommandPalette(); },
+    );
 
     // ── Disable Monaco's built-in find widget ──
     editor.updateOptions({
