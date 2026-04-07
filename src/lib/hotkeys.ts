@@ -6,7 +6,8 @@ export type HotkeyAction =
   | "openFile" | "save" | "saveAs" | "saveAll" | "closeTab" | "closeAll"
   | "findInFile" | "replaceInFile" | "findInProject" | "findNext" | "findPrev"
   | "goTo" | "toggleBookmark" | "nextBookmark" | "prevBookmark"
-  | "settings" | "nextTab" | "prevTab" | "toggleFold" | "wordWrap";
+  | "settings" | "nextTab" | "prevTab" | "toggleFold" | "wordWrap"
+  | "commandPalette";
 
 export const HOTKEY_LABELS: Record<HotkeyAction, string> = {
   openFile:        "Open file",
@@ -17,7 +18,7 @@ export const HOTKEY_LABELS: Record<HotkeyAction, string> = {
   closeAll:        "Close all tabs",
   findInFile:      "Find in file",
   replaceInFile:   "Replace in file",
-  findInProject:   "Search in project",
+  findInProject:   "Global Search",
   findNext:        "Find next",
   findPrev:        "Find previous",
   goTo:            "Go To line/column",
@@ -29,7 +30,47 @@ export const HOTKEY_LABELS: Record<HotkeyAction, string> = {
   prevTab:         "Previous tab",
   toggleFold:      "Fold/unfold current",
   wordWrap:        "Toggle word wrap",
+  commandPalette:  "Command palette",
 };
+
+/** Short labels for the F-key bar (max ~5 chars). */
+export const FKEY_SHORT_LABELS: Partial<Record<HotkeyAction, string>> = {
+  commandPalette: "Cmd",
+  save:           "Save",
+  saveAs:         "SvAs",
+  saveAll:        "SvAll",
+  openFile:       "Open",
+  closeTab:       "Close",
+  closeAll:       "ClAll",
+  findInFile:     "Find",
+  replaceInFile:  "Rplce",
+  findInProject:  "Srch",
+  findNext:       "Next",
+  findPrev:       "Prev",
+  goTo:           "GoTo",
+  toggleBookmark: "Mark",
+  nextBookmark:   "NxMk",
+  prevBookmark:   "PvMk",
+  settings:       "Set",
+  nextTab:        "NxTab",
+  prevTab:        "PvTab",
+  toggleFold:     "Fold",
+  wordWrap:       "Wrap",
+};
+
+/** Default action assigned to each F-key (index 0 = F1 … index 9 = F10). null = unassigned. */
+export const FKEY_DEFAULT_ACTIONS: (HotkeyAction | null)[] = [
+  "commandPalette", // F1
+  "save",           // F2
+  "findInFile",     // F3
+  "replaceInFile",  // F4
+  "findInProject",  // F5
+  "goTo",           // F6
+  "toggleFold",     // F7
+  "closeTab",       // F8
+  "wordWrap",       // F9
+  "settings",       // F10
+];
 
 export const HOTKEY_DEFAULTS: Record<HotkeyAction, string> = {
   openFile:        "Ctrl+O",
@@ -52,6 +93,7 @@ export const HOTKEY_DEFAULTS: Record<HotkeyAction, string> = {
   prevTab:         "Ctrl+PageUp",
   toggleFold:      "Ctrl+Shift+[",
   wordWrap:        "Alt+Z",
+  commandPalette:  "F1",
 };
 
 /** Merge stored hotkeys with defaults (stored values win). */

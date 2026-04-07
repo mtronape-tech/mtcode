@@ -93,6 +93,8 @@ export type AppSettings = {
   plcRainbowEnabled: boolean;
   /** 10 hex color strings for rainbow nesting levels 0-9 */
   plcRainbowColors: string[];
+  /** Actions assigned to F1–F10 (null = unassigned) */
+  fkeyActions: (string | null)[];
 };
 
 /** Emitted by the Rust file watcher when a file is modified outside the editor. */
@@ -148,6 +150,10 @@ export function deleteFile(path: string) {
 
 export function moveToTrash(path: string) {
   return invoke<void>("move_to_trash", { path });
+}
+
+export function createFolder(path: string) {
+  return invoke<void>("create_folder", { path });
 }
 
 export function readFileEncoding(path: string, encoding: string) {

@@ -6,6 +6,7 @@ import {
   type HotkeyAction,
   HOTKEY_LABELS,
   HOTKEY_DEFAULTS,
+  FKEY_DEFAULT_ACTIONS,
   eventToBinding,
 } from "../lib/hotkeys";
 import { THEME_FAMILIES } from "../lib/theme";
@@ -23,6 +24,7 @@ export type SettingsDraft = {
   searchCollapsedByDefault: boolean;
   plcRainbowEnabled: boolean;
   plcRainbowColors: string[];
+  fkeyActions: (string | null)[];
 };
 
 type Props = {
@@ -32,7 +34,7 @@ type Props = {
   onClose: () => void;
 };
 
-type CategoryId = "appearance" | "editor" | "search" | "autosave" | "hotkeys" | "language";
+type CategoryId = "appearance" | "editor" | "search" | "autosave" | "hotkeys" | "fkeys" | "language";
 
 const CATEGORIES: { id: CategoryId; label: string; path: string }[] = [
   { id: "appearance", label: "APPEARANCE", path: "/sys/config/appearance.cfg" },
@@ -40,6 +42,7 @@ const CATEGORIES: { id: CategoryId; label: string; path: string }[] = [
   { id: "search",     label: "SEARCH",     path: "/sys/config/search.cfg"     },
   { id: "autosave",   label: "AUTOSAVE",   path: "/sys/config/autosave.cfg"   },
   { id: "hotkeys",    label: "HOTKEYS",    path: "/sys/config/hotkeys.cfg"    },
+  { id: "fkeys",      label: "F-KEYS",     path: "/sys/config/fkeys.cfg"      },
   { id: "language",   label: "LANGUAGE",   path: "/sys/config/language.cfg"   },
 ];
 
@@ -292,32 +295,147 @@ export function SettingsModal({ open, initial, onSave, onClose }: Props) {
 
             {/* ── HOTKEYS ─────────────────────────────────────────── */}
             {category === "hotkeys" && (
-              <div className="flex flex-col gap-1">
-                <div className="font-mono text-[10px] font-bold tracking-widest text-muted-foreground select-none mb-2">
-                  // Click a binding to record a new key combo
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <div className="font-mono text-[10px] font-bold tracking-widest text-muted-foreground select-none mb-2">
+                    // MTCode — click a binding to record
+                  </div>
+                  <div className="border border-border">
+                    {(Object.keys(HOTKEY_LABELS) as HotkeyAction[]).map((action, i, arr) => {
+                      const current = draft.hotkeys[action] ?? HOTKEY_DEFAULTS[action];
+                      const isDefault = current === HOTKEY_DEFAULTS[action];
+                      return (
+                        <div
+                          key={action}
+                          className={cn(
+                            "grid items-center px-2 gap-2 h-[26px]",
+                            i !== arr.length - 1 && "border-b border-border",
+                          )}
+                          style={{ gridTemplateColumns: "1fr 160px auto" }}
+                        >
+                          <span className="font-mono text-[10px] text-muted-foreground select-none">
+                            {HOTKEY_LABELS[action]}
+                          </span>
+                          <KeyRecorder
+                            value={current}
+                            onChange={(binding) =>
+                              set("hotkeys", { ...draft.hotkeys, [action]: binding })
+                            }
+                          />
+                          <button
+                            type="button"
+                            className={cn(
+                              "font-mono text-[9px] px-1.5 h-[18px] border border-border select-none",
+                              isDefault
+                                ? "text-muted-foreground/30 cursor-default"
+                                : "text-muted-foreground hover:text-foreground hover:border-muted-foreground",
+                            )}
+                            title="Reset to default"
+                            disabled={isDefault}
+                            onClick={() =>
+                              set("hotkeys", { ...draft.hotkeys, [action]: HOTKEY_DEFAULTS[action] })
+                            }
+                          >
+                            RST
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="border border-border">
-                  {(Object.keys(HOTKEY_LABELS) as HotkeyAction[]).map((action, i, arr) => {
-                    const current = draft.hotkeys[action] ?? HOTKEY_DEFAULTS[action];
-                    const isDefault = current === HOTKEY_DEFAULTS[action];
-                    return (
+
+                {/* Monaco built-in shortcuts (read-only) */}
+                <div className="flex flex-col gap-1 mt-2">
+                  <div className="font-mono text-[10px] font-bold tracking-widest text-muted-foreground select-none mb-1">
+                    // Monaco Editor — built-in (read-only)
+                  </div>
+                  <div className="border border-border">
+                    {[
+                      { label: "Undo", binding: "Ctrl+Z" },
+                      { label: "Redo", binding: "Ctrl+Y" },
+                      { label: "Cut", binding: "Ctrl+X" },
+                      { label: "Copy", binding: "Ctrl+C" },
+                      { label: "Paste", binding: "Ctrl+V" },
+                      { label: "Select All", binding: "Ctrl+A" },
+                      { label: "Line Comment", binding: "Ctrl+/" },
+                      { label: "Block Comment", binding: "Ctrl+Shift+/" },
+                      { label: "Fold All", binding: "Ctrl+K Ctrl+0" },
+                      { label: "Unfold All", binding: "Ctrl+K Ctrl+J" },
+                      { label: "Toggle Fold", binding: "Ctrl+Shift+[" },
+                      { label: "Go to Line", binding: "Ctrl+G" },
+                      { label: "Find Next", binding: "F3" },
+                      { label: "Find Prev", binding: "Shift+F3" },
+                      { label: "Select Next Occurrence", binding: "Ctrl+D" },
+                      { label: "Select All Occurrences", binding: "Ctrl+Shift+L" },
+                      { label: "Delete Line", binding: "Ctrl+Shift+K" },
+                      { label: "Move Line Up", binding: "Alt+↑" },
+                      { label: "Move Line Down", binding: "Alt+↓" },
+                      { label: "Copy Line Up", binding: "Shift+Alt+↑" },
+                      { label: "Copy Line Down", binding: "Shift+Alt+↓" },
+                      { label: "Format Document", binding: "Shift+Alt+F" },
+                    ].map((item, i, arr) => (
                       <div
-                        key={action}
+                        key={item.label}
                         className={cn(
                           "grid items-center px-2 gap-2 h-[26px]",
                           i !== arr.length - 1 && "border-b border-border",
                         )}
-                        style={{ gridTemplateColumns: "1fr 160px auto" }}
+                        style={{ gridTemplateColumns: "1fr 160px" }}
                       >
                         <span className="font-mono text-[10px] text-muted-foreground select-none">
-                          {HOTKEY_LABELS[action]}
+                          {item.label}
                         </span>
-                        <KeyRecorder
-                          value={current}
-                          onChange={(binding) =>
-                            set("hotkeys", { ...draft.hotkeys, [action]: binding })
-                          }
-                        />
+                        <KbdBinding binding={item.binding} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="font-mono text-[10px] text-muted-foreground/40 select-none mt-1">
+                  {"> MTCode hotkeys apply after APPLY & SAVE"}
+                  <br />
+                  {"> Monaco shortcuts are built-in and cannot be remapped"}
+                </div>
+              </div>
+            )}
+
+            {/* ── F-KEYS ───────────────────────────────────────────── */}
+            {category === "fkeys" && (
+              <div className="flex flex-col gap-3">
+                <div className="font-mono text-[10px] font-bold tracking-widest text-muted-foreground select-none mb-2">
+                  // Assign actions to function keys F1–F10
+                </div>
+                <div className="border border-border">
+                  {Array.from({ length: 10 }, (_, i) => {
+                    const current = draft.fkeyActions[i] ?? null;
+                    const isDefault = current === FKEY_DEFAULT_ACTIONS[i];
+                    return (
+                      <div
+                        key={i}
+                        className={cn(
+                          "grid items-center px-2 gap-2 h-[28px]",
+                          i !== 9 && "border-b border-border",
+                        )}
+                        style={{ gridTemplateColumns: "48px 1fr auto" }}
+                      >
+                        <span className="font-mono text-[10px] text-primary select-none">F{i + 1}</span>
+                        <select
+                          className="bg-transparent font-mono text-[10px] text-foreground border-0 outline-none w-full cursor-pointer"
+                          value={current ?? ""}
+                          onChange={(e) => {
+                            const val = e.target.value || null;
+                            const next = [...draft.fkeyActions];
+                            next[i] = val;
+                            set("fkeyActions", next);
+                          }}
+                        >
+                          <option value="">(none)</option>
+                          {(Object.keys(HOTKEY_LABELS) as HotkeyAction[]).map((action) => (
+                            <option key={action} value={action}>
+                              {HOTKEY_LABELS[action]}
+                            </option>
+                          ))}
+                        </select>
                         <button
                           type="button"
                           className={cn(
@@ -328,9 +446,11 @@ export function SettingsModal({ open, initial, onSave, onClose }: Props) {
                           )}
                           title="Reset to default"
                           disabled={isDefault}
-                          onClick={() =>
-                            set("hotkeys", { ...draft.hotkeys, [action]: HOTKEY_DEFAULTS[action] })
-                          }
+                          onClick={() => {
+                            const next = [...draft.fkeyActions];
+                            next[i] = FKEY_DEFAULT_ACTIONS[i];
+                            set("fkeyActions", next);
+                          }}
                         >
                           RST
                         </button>
@@ -338,8 +458,8 @@ export function SettingsModal({ open, initial, onSave, onClose }: Props) {
                     );
                   })}
                 </div>
-                <div className="font-mono text-[10px] text-muted-foreground/40 select-none mt-2">
-                  {"> changes apply after APPLY & SAVE"}
+                <div className="font-mono text-[10px] text-muted-foreground/40 select-none mt-1">
+                  {"> Changes apply after APPLY & SAVE"}
                 </div>
               </div>
             )}

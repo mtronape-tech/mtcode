@@ -17,6 +17,7 @@ import {
   renameFile,
   deleteFile,
   moveToTrash,
+  createFolder,
   readFileEncoding,
   saveFileEncoding,
   type AppSettings,
@@ -41,6 +42,7 @@ import { StatusBar } from "./components/StatusBar";
 import { SettingsModal, type SettingsDraft } from "./components/SettingsModal";
 import { AboutDialog } from "./components/AboutDialog";
 import { GoToDialog } from "./components/GoToDialog";
+import { CommandPalette, type CommandPaletteItem } from "./components/CommandPalette";
 import { useTheme } from "./context/ThemeContext";
 import { isValidThemeId, THEMES } from "./lib/theme";
 import {
@@ -51,7 +53,7 @@ import {
   MONACO_THEME_MONOKAI_DARK,
   MONACO_THEME_MONOKAI_LIGHT,
 } from "./lib/monacoThemes";
-import { matchesBinding, resolveHotkeys, HOTKEY_DEFAULTS } from "./lib/hotkeys";
+import { matchesBinding, resolveHotkeys, HOTKEY_DEFAULTS, FKEY_DEFAULT_ACTIONS, FKEY_SHORT_LABELS, HOTKEY_LABELS, type HotkeyAction } from "./lib/hotkeys";
 import { registerPlcLanguage, PLC_LANGUAGE_ID } from "./lib/plcLanguage";
 import {
   applyRainbowColors,
@@ -186,6 +188,10 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [savedSidebarWidth, setSavedSidebarWidth] = useState<number>(300);
 
+  // Tree selection & inline folder creation
+  const [selectedTreePath, setSelectedTreePath] = useState<string | null>(null);
+  const [creatingFolderIn, setCreatingFolderIn] = useState<string | null>(null);
+
   const [fontSize, setFontSize] = useState<number>(13);
   const [tabSize, setTabSize] = useState<number>(4);
   const [wordWrap, setWordWrap] = useState<"off" | "on" | "wordWrapColumn">("off");
@@ -214,6 +220,8 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [aboutOpen, setAboutOpen] = useState<boolean>(false);
   const [goToOpen, setGoToOpen] = useState<boolean>(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
+  const [fkeyActions, setFkeyActions] = useState<(string | null)[]>(FKEY_DEFAULT_ACTIONS);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkMap>(new Map());
   const bookmarkDecorRef = useRef<import("monaco-editor").editor.IEditorDecorationsCollection | null>(null);
@@ -474,6 +482,11 @@ export function App() {
     });
   };
 
+  // Update bookmark decorations when bookmarks or active tab changes
+  useEffect(() => {
+    if (editorRef.current) updateBookmarkDecorations();
+  }, [bookmarks, activeTabId]);
+
   // ── Go To ────────────────────────────────────────────────────────────────────
   const handleGoTo = (line: number, col: number) => {
     const ed = editorRef.current;
@@ -590,6 +603,9 @@ export function App() {
     setPlcRainbowEnabled(draft.plcRainbowEnabled);
     // Keep [] if user reset to auto; otherwise use the full 10-color custom set
     setPlcRainbowColors(draft.plcRainbowColors.length === 10 ? draft.plcRainbowColors : []);
+    if (Array.isArray(draft.fkeyActions) && draft.fkeyActions.length === 10) {
+      setFkeyActions(draft.fkeyActions);
+    }
   };
 
   // Keep action refs current every render (safe pattern for stable callbacks)
@@ -661,6 +677,9 @@ export function App() {
         if (Array.isArray(settings.plcRainbowColors) && settings.plcRainbowColors.length === 10) {
           setPlcRainbowColors(settings.plcRainbowColors);
         }
+        if (Array.isArray(settings.fkeyActions) && settings.fkeyActions.length === 10) {
+          setFkeyActions(settings.fkeyActions);
+        }
       } catch {
         setAutosaveMode("off");
         setAutosaveDelayMs(1200);
@@ -672,9 +691,9 @@ export function App() {
 
   useEffect(() => {
     if (!settingsLoaded || !isTauriRuntime()) return;
-    const payload: AppSettings = { autosaveMode, autosaveDelayMs, themeId, fontSize, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors };
+    const payload: AppSettings = { autosaveMode, autosaveDelayMs, themeId, fontSize, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions };
     void saveSettings(payload);
-  }, [autosaveMode, autosaveDelayMs, themeId, fontSize, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, settingsLoaded]);
+  }, [autosaveMode, autosaveDelayMs, themeId, fontSize, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions, settingsLoaded]);
 
   // Re-apply rainbow decorations when toggle, colors, or theme changes
   useEffect(() => {
@@ -867,7 +886,8 @@ export function App() {
       // IDE-wide shortcuts (use hotkeysRef.current — avoids stale closure)
       const hk = hotkeysRef.current;
       if (matchesBinding(event, hk.findInProject)) { event.preventDefault(); openProjectSearchPanel(editorSelection()); return; }
-      if (matchesBinding(event, hk.settings))      { event.preventDefault(); setSettingsOpen(true); return; }
+      if (matchesBinding(event, hk.settings))        { event.preventDefault(); setSettingsOpen(true); return; }
+      if (matchesBinding(event, hk.commandPalette))  { event.preventDefault(); setCommandPaletteOpen(true); return; }
 
       // Editor / non-input shortcuts
       if (!typingInField && matchesBinding(event, hk.openFile))      { event.preventDefault(); void openSingleFile(); }
@@ -875,9 +895,17 @@ export function App() {
       if (!typingInField && matchesBinding(event, hk.closeTab))      { event.preventDefault(); if (activeTabId) closeTab(activeTabId); }
       if (!typingInField && matchesBinding(event, hk.findInFile))    { event.preventDefault(); openFindPanel("find", editorSelection()); }
       if (!typingInField && matchesBinding(event, hk.replaceInFile)) { event.preventDefault(); openFindPanel("replace", editorSelection()); }
-      if (!typingInField && key === "F1") { event.preventDefault(); openCommandPalette(); }
+
+      // F-key bar actions (bare F1–F10, no modifiers)
+      if (!event.ctrlKey && !event.altKey && !event.shiftKey && /^F\d+$/.test(key)) {
+        const fIdx = parseInt(key.slice(1), 10) - 1;
+        if (fIdx >= 0 && fIdx < fkeyActions.length) {
+          const action = fkeyActions[fIdx];
+          if (action) { event.preventDefault(); executeAction(action); return; }
+        }
+      }
+
       if (searchPanelOpen && key === "Escape") { event.preventDefault(); closeSearchTabs(); }
-      if (searchPanelOpen && searchMode === "file" && key === "F3") { event.preventDefault(); navigateFind(event.shiftKey ? -1 : 1); }
 
       // Tab cycling — uses hk.nextTab / prevTab
       const isTabNext = matchesBinding(event, hk.nextTab);
@@ -990,7 +1018,66 @@ export function App() {
     }
   };
 
+  const createFolderHandler = async () => {
+    if (!projectRoot) {
+      setErrorText("Open a project folder first to create a new folder.");
+      return;
+    }
+    if (!isTauriRuntime()) {
+      setErrorText("This action is available only in Tauri runtime. Run: npm run tauri -- dev");
+      return;
+    }
+    // Determine target: selected folder, or project root
+    let targetPath = projectRoot;
+    if (selectedTreePath) {
+      const node = findNode(treeNodes, selectedTreePath);
+      if (node?.isDir) {
+        targetPath = selectedTreePath;
+        // Ensure the folder is expanded so the inline input is visible
+        if (!node.expanded) {
+          await toggleFolder(selectedTreePath);
+        }
+      }
+    }
+    setCreatingFolderIn(targetPath);
+  };
+
+  /** Generate a unique folder name by appending _N suffix if needed */
+  const getUniqueFolderName = (baseName: string, parentPath: string): string => {
+    const parentNode = findNode(treeNodes, parentPath);
+    if (!parentNode) return baseName;
+    const existingNames = new Set(parentNode.children.map((c) => c.name));
+    if (!existingNames.has(baseName)) return baseName;
+    let i = 2;
+    while (existingNames.has(`${baseName}_${i}`)) i++;
+    return `${baseName}_${i}`;
+  };
+
+  const confirmCreateFolder = async (name: string) => {
+    if (!creatingFolderIn) return;
+    const trimmed = name.trim();
+    if (!trimmed) { setCreatingFolderIn(null); return; }
+    setErrorText("");
+    try {
+      const uniqueName = getUniqueFolderName(trimmed, creatingFolderIn);
+      const newPath = `${creatingFolderIn}/${uniqueName}`;
+      await createFolder(newPath);
+      setCreatingFolderIn(null);
+      // Refresh the tree to show the new folder
+      const result = await openProject(projectRoot!);
+      setTreeNodes(toNodes(result.entries));
+    } catch (error) {
+      setErrorText(`Operation failed: ${String(error)}`);
+      setCreatingFolderIn(null);
+    }
+  };
+
+  const cancelCreateFolder = () => {
+    setCreatingFolderIn(null);
+  };
+
   const toggleFolder = async (path: string) => {
+    setSelectedTreePath(path);
     const nodeSnapshot = findNode(treeNodes, path);
     if (!nodeSnapshot || !nodeSnapshot.isDir) return;
     const willExpand = !nodeSnapshot.expanded;
@@ -1034,6 +1121,7 @@ export function App() {
     cursor?: { line: number; column: number; matchLength?: number },
     switchVisible = true,
   ) => {
+    setSelectedTreePath(path);
     setErrorText("");
     try {
       const result = await openFile(path);
@@ -1146,7 +1234,11 @@ export function App() {
   };
 
   const navigateFind = (direction: 1 | -1) => {
-    const ranges = findRanges.length ? findRanges : runFind(findQuery);
+    // If no ranges yet and we have a query, run find first
+    let ranges = findRanges;
+    if (!ranges.length && findQuery.trim()) {
+      ranges = runFind(findQuery);
+    }
     if (!ranges.length) return;
     const nextIndex = (findIndex + direction + ranges.length) % ranges.length;
     setFindIndex(nextIndex);
@@ -1319,16 +1411,26 @@ export function App() {
   const onEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
     setEditorMountVersion((v) => v + 1);
+
+    // ── Disable Monaco's built-in find widget ──
+    editor.updateOptions({
+      find: {
+        addExtraSpaceOnTop: false,
+        autoFindInSelection: "never",
+        seedSearchStringFromSelection: "never",
+      },
+    });
+
     const pos = editor.getPosition();
     if (pos) setCursorText(`Ln ${pos.lineNumber}, Col ${pos.column}`);
     editor.onDidChangeCursorPosition((event) => {
       setCursorText(`Ln ${event.position.lineNumber}, Col ${event.position.column}`);
     });
 
-    // Click on line number → toggle bookmark
+    // Click on line number or glyph margin → toggle bookmark
     editor.onMouseDown((e) => {
-      // MouseTargetType.GUTTER_LINE_NUMBERS = 3
-      if (e.target.type === 3 && e.target.position) {
+      // MouseTargetType.GUTTER_GLYPH_MARGIN = 2, GUTTER_LINE_NUMBERS = 3
+      if ((e.target.type === 2 || e.target.type === 3) && e.target.position) {
         editorActionsRef.current.toggleBookmarkAtLine(e.target.position.lineNumber);
       }
     });
@@ -1347,10 +1449,35 @@ export function App() {
     editor.onDidChangeModel(() => {
       rainbowDecorRef.current = null; // reset collection — belongs to old model
       updateRainbowDecorations(editor);
+      updateBookmarkDecorations();
     });
 
     // Intercept keys inside Monaco before its own handlers
     editor.onKeyDown((e) => {
+      const ref = editorActionsRef.current;
+
+      // Ctrl+F → our find in file
+      if (e.ctrlKey && !e.shiftKey && e.code === "KeyF") {
+        e.preventDefault();
+        e.stopPropagation();
+        const sel = editor.getSelection();
+        const model = editor.getModel();
+        const query = (sel && !sel.isEmpty() && model) ? model.getValueInRange(sel) || undefined : undefined;
+        ref.openFindPanel("find", query);
+        return;
+      }
+
+      // Ctrl+H → our replace
+      if (e.ctrlKey && !e.shiftKey && e.code === "KeyH") {
+        e.preventDefault();
+        e.stopPropagation();
+        const sel = editor.getSelection();
+        const model = editor.getModel();
+        const query = (sel && !sel.isEmpty() && model) ? model.getValueInRange(sel) || undefined : undefined;
+        ref.openFindPanel("replace", query);
+        return;
+      }
+
       // Ctrl+Shift+F → project search
       if (e.ctrlKey && e.shiftKey && e.code === "KeyF") {
         e.preventDefault();
@@ -1361,7 +1488,7 @@ export function App() {
         editorActionsRef.current.openProjectSearchPanel(query);
         return;
       }
-      const ref = editorActionsRef.current;
+
       // Alt+↓ / Alt+↑ → navigate find results (when file search is open)
       if (e.altKey && !e.ctrlKey && !e.shiftKey && (e.code === "ArrowDown" || e.code === "ArrowUp")) {
         if (ref.searchPanelOpen && ref.searchMode === "file") {
@@ -1371,6 +1498,7 @@ export function App() {
         }
         return;
       }
+
       // Escape → close find bar
       if (e.code === "Escape" && ref.searchPanelOpen) {
         e.preventDefault();
@@ -1409,11 +1537,28 @@ export function App() {
   };
 
 
-  const openCommandPalette = () => {
-    const editor = editorRef.current;
-    if (!editor) { setInfoText("Editor is not initialized yet."); return; }
-    editor.focus();
-    editor.trigger("mtcode", "editor.action.quickCommand", null);
+  const executeAction = (action: string) => {
+    switch (action as HotkeyAction) {
+      case "commandPalette":  setCommandPaletteOpen(true); break;
+      case "save":            void saveActiveTab(); break;
+      case "saveAs":          void saveActiveTabAs(); break;
+      case "saveAll":         void saveAllTabs(); break;
+      case "openFile":        void openSingleFile(); break;
+      case "closeTab":        if (activeTabId) closeTab(activeTabId); break;
+      case "closeAll":        closeAllTabs(); break;
+      case "findInFile":      openFindPanel("find"); break;
+      case "replaceInFile":   openFindPanel("replace"); break;
+      case "findInProject":   openProjectSearchPanel(); break;
+      case "findNext":        navigateFind(1); break;
+      case "findPrev":        navigateFind(-1); break;
+      case "goTo":            setGoToOpen(true); break;
+      case "toggleBookmark":  toggleBookmark(); break;
+      case "nextBookmark":    navigateBookmark(1); break;
+      case "prevBookmark":    navigateBookmark(-1); break;
+      case "settings":        setSettingsOpen(true); break;
+      case "toggleFold":      editorCommand("editor.action.toggleFold"); break;
+      case "wordWrap":        setWordWrap((w) => (w === "off" ? "on" : "off")); break;
+    }
   };
 
 
@@ -1508,8 +1653,8 @@ export function App() {
       { label: "Find in File...",   shortcut: "Ctrl+F",       onSelect: () => openFindPanel("find") },
       { label: "Global Search...",  shortcut: "Ctrl+Shift+F", onSelect: () => openProjectSearchPanel() },
       { label: "Replace...",        shortcut: "Ctrl+H",       onSelect: () => openFindPanel("replace"), disabled: !activeTab },
-      { label: "Find Next",         shortcut: "Alt+↓",        onSelect: () => navigateFind(1),  disabled: !searchPanelOpen || searchMode !== "file", separatorBefore: true },
-      { label: "Find Previous",     shortcut: "Alt+↑",        onSelect: () => navigateFind(-1), disabled: !searchPanelOpen || searchMode !== "file" },
+      { label: "Find Next",         shortcut: "Alt+↓",  onSelect: () => navigateFind(1),  disabled: !searchPanelOpen || searchMode !== "file", separatorBefore: true },
+      { label: "Find Previous",     shortcut: "Alt+↑", onSelect: () => navigateFind(-1), disabled: !searchPanelOpen || searchMode !== "file" },
       { label: "Go To...",          shortcut: "Ctrl+G",       onSelect: () => setGoToOpen(true), disabled: !activeTab, separatorBefore: true },
       // Bookmarks
       { label: "Toggle Bookmark",   shortcut: "Ctrl+F2",      onSelect: toggleBookmark,         disabled: !activeTab, separatorBefore: true },
@@ -1520,7 +1665,7 @@ export function App() {
 
     // ── VIEW ──────────────────────────────────────────────────────────────────
     view: [
-      { label: "Command Palette",    shortcut: "F1",          onSelect: openCommandPalette },
+      { label: "Command Palette",    shortcut: "F1",          onSelect: () => setCommandPaletteOpen(true) },
       { label: "Fold All",           separatorBefore: true,   onSelect: () => editorCommand("editor.foldAll"),   disabled: !activeTab },
       { label: "Unfold All",                                   onSelect: () => editorCommand("editor.unfoldAll"), disabled: !activeTab },
       { label: "Collapse Current Level",                       onSelect: () => editorCommand("editor.fold"),     disabled: !activeTab },
@@ -1554,7 +1699,7 @@ export function App() {
 
     // ── HELP ──────────────────────────────────────────────────────────────────
     help: [
-      { label: "Help", onSelect: () => setInfoText("Ctrl+O Open  Ctrl+S Save  Ctrl+F Find  Ctrl+G GoTo  F2 Bookmark  Ctrl+Shift+F Project Search") },
+      { label: "Help", onSelect: () => setInfoText("Ctrl+O Open  Ctrl+S Save  Ctrl+F Find  Ctrl+G GoTo  F2 Bookmark  Alt+↓/↑ Find Next/Prev  Ctrl+Shift+F Project Search") },
       { label: "About MTCode...", separatorBefore: true, onSelect: () => setAboutOpen(true) },
     ],
   }),
@@ -1562,6 +1707,23 @@ export function App() {
   [activeTab, findRanges.length, projectRoot, searchPanelOpen, searchMode, activeTabId, visibleTabId, recentFiles, tabs.length, wordWrap, sidebarCollapsed],
 );
 
+
+  const commandPaletteItems = useMemo<CommandPaletteItem[]>(() => {
+    const result: CommandPaletteItem[] = [];
+    for (const [menuKey, actions] of Object.entries(menuActions)) {
+      for (const action of actions as MenuAction[]) {
+        if (!action.label) continue;
+        result.push({
+          label: action.label,
+          group: menuKey.toUpperCase(),
+          shortcut: action.shortcut,
+          disabled: action.disabled,
+          onSelect: action.onSelect,
+        });
+      }
+    }
+    return result;
+  }, [menuActions]);
 
   return (
     <div className="h-full grid" style={{ gridTemplateRows: "38px 1fr 20px 26px" }}>
@@ -1584,7 +1746,7 @@ export function App() {
       <main className="flex min-h-0 overflow-hidden">
         {sidebarCollapsed ? (
           /* Collapsed sidebar strip */
-          <div className="w-[28px] shrink-0 border-r border-border bg-card flex flex-col items-center pt-2 gap-1">
+          <div className="w-[28px] shrink-0 border-r border-border bg-card flex flex-col items-center pt-1">
             <button
               className="w-[20px] h-[20px] border border-border bg-transparent text-muted-foreground inline-flex items-center justify-center hover:text-foreground transition-colors"
               title="Show project tree"
@@ -1603,13 +1765,17 @@ export function App() {
             errorText={errorText}
             infoText={infoText}
             sidebarWidth={sidebarWidth}
-            onOpenFile={() => void openSingleFile()}
-            onOpenFolder={() => void openProjectFolder()}
-            onOpenProjectSearch={() => openProjectSearchPanel()}
+            onNewFile={() => openNewUntitledTab()}
+            onCreateFolder={() => void createFolderHandler()}
             onToggleFolder={toggleFolder}
             onFileClick={openFileFromTree}
             onToggleCollapse={toggleSidebar}
             onStartResize={startSidebarResize}
+            selectedTreePath={selectedTreePath}
+            creatingFolderIn={creatingFolderIn}
+            onConfirmCreateFolder={confirmCreateFolder}
+            onCancelCreateFolder={cancelCreateFolder}
+            projectRoot={projectRoot}
           />
         )}
 
@@ -1681,6 +1847,7 @@ export function App() {
                 onMount={onEditorMount}
                 options={{
                   minimap: { enabled: false },
+                  glyphMargin: true,
                   scrollbar: {
                     vertical: "visible",
                     horizontal: "visible",
@@ -1702,31 +1869,21 @@ export function App() {
       </main>
 
       <div className="nc-fkeys border-t border-border">
-        {(
-          [
-            { n: "1",  label: "Help",  fn: () => openCommandPalette()                },
-            { n: "2",  label: "Save",  fn: () => void saveActiveTab()                 },
-            { n: "3",  label: "Find",  fn: () => openFindPanel("find")                },
-            { n: "4",  label: "Rplce", fn: () => openFindPanel("replace")             },
-            { n: "5",  label: "Proj",  fn: () => openProjectSearchPanel()             },
-            { n: "6",  label: "",      fn: () => {}                                   },
-            { n: "7",  label: "",      fn: () => {}                                   },
-            { n: "8",  label: "Close", fn: () => activeTabId && closeTab(activeTabId) },
-            { n: "9",  label: "",      fn: () => {}                                   },
-            { n: "10", label: "Set",   fn: () => setSettingsOpen(true)                },
-          ] as const
-        ).map(({ n, label, fn }) => (
-          <button
-            key={n}
-            type="button"
-            className="nc-fkey-btn"
-            onClick={fn}
-            title={label ? `F${n}: ${label}` : `F${n}`}
-          >
-            <span className="nc-fkey-num">{n}</span>
-            <span className="nc-fkey-label">{label}</span>
-          </button>
-        ))}
+        {fkeyActions.map((action, i) => {
+          const label = action ? (FKEY_SHORT_LABELS[action as HotkeyAction] ?? action) : "";
+          return (
+            <button
+              key={i}
+              type="button"
+              className="nc-fkey-btn"
+              onClick={() => action && executeAction(action)}
+              title={action ? `F${i + 1}: ${HOTKEY_LABELS[action as HotkeyAction] ?? action}` : `F${i + 1}`}
+            >
+              <span className="nc-fkey-num">{i + 1}</span>
+              <span className="nc-fkey-label">{label}</span>
+            </button>
+          );
+        })}
       </div>
 
       <StatusBar
@@ -1765,6 +1922,7 @@ export function App() {
           searchCollapsedByDefault,
           plcRainbowEnabled,
           plcRainbowColors,
+          fkeyActions,
         }}
         onSave={applySettings}
         onClose={() => setSettingsOpen(false)}
@@ -1785,6 +1943,12 @@ export function App() {
         maxCol={editorRef.current?.getModel()?.getLineMaxColumn(
           parseInt(cursorText.match(/Ln\s*(\d+)/)?.[1] ?? "1", 10)) ?? 1}
         onGoTo={handleGoTo}
+      />
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        items={commandPaletteItems}
+        onClose={() => setCommandPaletteOpen(false)}
       />
     </div>
   );
