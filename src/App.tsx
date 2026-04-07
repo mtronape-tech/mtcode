@@ -1546,24 +1546,26 @@ export function App() {
 
 
   const executeAction = (action: string) => {
+    // Defer state updates so Monaco finishes its current event cycle before React re-renders
+    const defer = (fn: () => void) => setTimeout(fn, 0);
     switch (action as HotkeyAction) {
-      case "commandPalette":  setCommandPaletteOpen(true); break;
+      case "commandPalette":  defer(() => setCommandPaletteOpen(true)); break;
       case "save":            void saveActiveTab(); break;
-      case "saveAs":          void saveActiveTabAs(); break;
+      case "saveAs":          defer(() => void saveActiveTabAs()); break;
       case "saveAll":         void saveAllTabs(); break;
-      case "openFile":        void openSingleFile(); break;
+      case "openFile":        defer(() => void openSingleFile()); break;
       case "closeTab":        if (activeTabId) closeTab(activeTabId); break;
       case "closeAll":        closeAllTabs(); break;
-      case "findInFile":      openFindPanel("find"); break;
-      case "replaceInFile":   openFindPanel("replace"); break;
-      case "findInProject":   openProjectSearchPanel(); break;
+      case "findInFile":      defer(() => openFindPanel("find")); break;
+      case "replaceInFile":   defer(() => openFindPanel("replace")); break;
+      case "findInProject":   defer(() => openProjectSearchPanel()); break;
       case "findNext":        navigateFind(1); break;
       case "findPrev":        navigateFind(-1); break;
-      case "goTo":            setGoToOpen(true); break;
+      case "goTo":            defer(() => setGoToOpen(true)); break;
       case "toggleBookmark":  toggleBookmark(); break;
       case "nextBookmark":    navigateBookmark(1); break;
       case "prevBookmark":    navigateBookmark(-1); break;
-      case "settings":        setSettingsOpen(true); break;
+      case "settings":        defer(() => setSettingsOpen(true)); break;
       case "toggleFold":      editorCommand("editor.toggleFold"); break;
       case "wordWrap":        setWordWrap((w) => (w === "off" ? "on" : "off")); break;
     }
