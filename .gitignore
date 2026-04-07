@@ -10,6 +10,9 @@ dist/
 # Tauri build artifacts (binaries, WebView2 runtime)
 artifacts/
 
+# Project docs (reference materials, binaries)
+docs/
+
 # Editor / OS
 .DS_Store
 Thumbs.db
