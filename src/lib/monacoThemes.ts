@@ -373,7 +373,7 @@ export const MONACO_THEME_NORTON_DARK: Monaco.editor.IStandaloneThemeData = {
     { background: "0D0D6A", token: "" },
 
     // ── Comments ──────────────────────────────────────────────────────────────
-    { foreground: "334499", token: "comment", fontStyle: "italic" },
+    { foreground: "7AAFDD", token: "comment", fontStyle: "italic" },
     { foreground: "334499", token: "meta.diff" },
     { foreground: "334499", token: "meta.diff.header" },
 

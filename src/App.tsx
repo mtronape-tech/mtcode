@@ -1471,7 +1471,6 @@ export function App() {
       { label: "Trim Trailing Space",  separatorBefore: true, onSelect: trimTrailingSpace,  disabled: !activeTab },
       { label: "Trim Leading Space",                         onSelect: trimLeadingSpace,     disabled: !activeTab },
       { label: "Remove Empty Lines",                         onSelect: () => removeEmptyLines(false), disabled: !activeTab },
-      { label: "Remove Empty Lines (Blank chars)",           onSelect: () => removeEmptyLines(true),  disabled: !activeTab },
       // Comment
       { label: "Toggle Line Comment",  shortcut: "Ctrl+/",  separatorBefore: true, onSelect: () => editorCommand("editor.action.commentLine"),      disabled: !activeTab },
       { label: "Toggle Block Comment", shortcut: "Ctrl+Shift+/",                   onSelect: () => editorCommand("editor.action.blockComment"),      disabled: !activeTab },
@@ -1485,7 +1484,7 @@ export function App() {
     // ── SEARCH ────────────────────────────────────────────────────────────────
     search: [
       { label: "Find in File...",   shortcut: "Ctrl+F",       onSelect: () => openFindPanel("find") },
-      { label: "Find in Project...",shortcut: "Ctrl+Shift+F", onSelect: () => openProjectSearchPanel() },
+      { label: "Global Search...",  shortcut: "Ctrl+Shift+F", onSelect: () => openProjectSearchPanel() },
       { label: "Replace...",        shortcut: "Ctrl+H",       onSelect: () => openFindPanel("replace"), disabled: !activeTab },
       { label: "Find Next",         shortcut: "Alt+↓",        onSelect: () => navigateFind(1),  disabled: !searchPanelOpen || searchMode !== "file", separatorBefore: true },
       { label: "Find Previous",     shortcut: "Alt+↑",        onSelect: () => navigateFind(-1), disabled: !searchPanelOpen || searchMode !== "file" },
