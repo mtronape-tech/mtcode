@@ -1556,7 +1556,7 @@ export function App() {
       case "nextBookmark":    navigateBookmark(1); break;
       case "prevBookmark":    navigateBookmark(-1); break;
       case "settings":        setSettingsOpen(true); break;
-      case "toggleFold":      editorCommand("editor.action.toggleFold"); break;
+      case "toggleFold":      editorCommand("editor.toggleFold"); break;
       case "wordWrap":        setWordWrap((w) => (w === "off" ? "on" : "off")); break;
     }
   };
