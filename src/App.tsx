@@ -224,7 +224,7 @@ export function App() {
   const [fkeyActions, setFkeyActions] = useState<(string | null)[]>(FKEY_DEFAULT_ACTIONS);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkMap>(new Map());
-  const bookmarkDecorRef = useRef<string[]>([]);
+  const bookmarkDecorRef = useRef<import("monaco-editor").editor.IEditorDecorationsCollection | null>(null);
 
   const [openMenu, setOpenMenu] = useState<MenuKey | null>(null);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState<number>(-1);
@@ -265,8 +265,7 @@ export function App() {
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const projectSearchInputRef = useRef<HTMLInputElement | null>(null);
   const sidebarResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
-  // PLC rainbow decoration IDs (deltaDecorations pattern — safer than IEditorDecorationsCollection)
-  const rainbowDecorRef = useRef<string[]>([]);
+  const rainbowDecorRef = useRef<import("monaco-editor").editor.IEditorDecorationsCollection | null>(null);
 
   // ── Recent files ─────────────────────────────────────────────────────────────
   const pushRecentFile = (path: string) => {
@@ -413,9 +412,10 @@ export function App() {
   // ── Bookmarks ─────────────────────────────────────────────────────────────────
   const updateBookmarkDecorations = () => {
     const ed = editorRef.current;
-    const model = ed?.getModel();
-    if (!ed || !model) return;
-    const modelUri = model.uri.toString();
+    if (!ed || !ed.getModel()) return;
+    if (!bookmarkDecorRef.current) {
+      bookmarkDecorRef.current = ed.createDecorationsCollection([]);
+    }
     const path = activeTab?.path ?? "";
     const lines = bookmarks.get(path) ?? new Set<number>();
     const decors = Array.from(lines).map((ln) => ({
@@ -427,14 +427,11 @@ export function App() {
         overviewRuler: { color: "hsl(var(--primary))", position: 4 },
       },
     }));
-    requestAnimationFrame(() => {
-      if (editorRef.current?.getModel()?.uri.toString() !== modelUri) return;
-      try {
-        bookmarkDecorRef.current = editorRef.current.deltaDecorations(bookmarkDecorRef.current, decors);
-      } catch {
-        bookmarkDecorRef.current = [];
-      }
-    });
+    try {
+      bookmarkDecorRef.current.set(decors);
+    } catch {
+      bookmarkDecorRef.current = null;
+    }
   };
 
   const toggleBookmarkAtLine = (line: number) => {
@@ -509,9 +506,16 @@ export function App() {
     if (!ed) return;
     try {
       ed.focus();
-      ed.trigger("menu", cmd, null);
+      // getAction().run() is safer than trigger() — goes through action system,
+      // not the keybinding/view-command pipeline that can touch stale DOM nodes
+      const action = ed.getAction(cmd);
+      if (action) {
+        void action.run();
+      } else {
+        ed.trigger("keyboard", cmd, null);
+      }
     } catch {
-      // Ignore unsupported commands (e.g. fold on plain-text files)
+      // Ignore unsupported commands (e.g. fold on non-folding languages)
     }
   };
 
@@ -1410,18 +1414,19 @@ export function App() {
   const updateRainbowDecorations = (editor: import("monaco-editor").editor.IStandaloneCodeEditor) => {
     const model = editor.getModel();
     if (!model) return;
-    const modelUri = model.uri.toString();
-    const next = (!plcRainbowEnabledRef.current || model.getLanguageId() !== PLC_LANGUAGE_ID)
-      ? []
-      : createRainbowDecorations(parseRainbowBlocks(model.getValue()));
-    requestAnimationFrame(() => {
-      if (editorRef.current?.getModel()?.uri.toString() !== modelUri) return;
-      try {
-        rainbowDecorRef.current = editorRef.current.deltaDecorations(rainbowDecorRef.current, next);
-      } catch {
-        rainbowDecorRef.current = [];
-      }
-    });
+    if (!rainbowDecorRef.current) {
+      rainbowDecorRef.current = editor.createDecorationsCollection([]);
+    }
+    if (!plcRainbowEnabledRef.current || model.getLanguageId() !== PLC_LANGUAGE_ID) {
+      try { rainbowDecorRef.current.clear(); } catch { rainbowDecorRef.current = null; }
+      return;
+    }
+    const next = createRainbowDecorations(parseRainbowBlocks(model.getValue()));
+    try {
+      rainbowDecorRef.current.set(next);
+    } catch {
+      rainbowDecorRef.current = null;
+    }
   };
 
   const onEditorMount: OnMount = (editor, monaco) => {
@@ -1479,8 +1484,10 @@ export function App() {
 
     // Re-run when the model is swapped (tab switch)
     editor.onDidChangeModel(() => {
-      rainbowDecorRef.current = [];   // IDs from old model are now invalid
-      bookmarkDecorRef.current = [];  // IDs from old model are now invalid
+      try { rainbowDecorRef.current?.clear(); } catch { /* ignore */ }
+      rainbowDecorRef.current = null;
+      try { bookmarkDecorRef.current?.clear(); } catch { /* ignore */ }
+      bookmarkDecorRef.current = null;
       updateRainbowDecorations(editor);
       updateBookmarkDecorations();
     });
