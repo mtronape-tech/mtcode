@@ -413,7 +413,9 @@ export function App() {
   // ── Bookmarks ─────────────────────────────────────────────────────────────────
   const updateBookmarkDecorations = () => {
     const ed = editorRef.current;
-    if (!ed || !ed.getModel()) return;
+    const model = ed?.getModel();
+    if (!ed || !model) return;
+    const modelUri = model.uri.toString();
     const path = activeTab?.path ?? "";
     const lines = bookmarks.get(path) ?? new Set<number>();
     const decors = Array.from(lines).map((ln) => ({
@@ -425,11 +427,14 @@ export function App() {
         overviewRuler: { color: "hsl(var(--primary))", position: 4 },
       },
     }));
-    try {
-      bookmarkDecorRef.current = ed.deltaDecorations(bookmarkDecorRef.current, decors);
-    } catch {
-      bookmarkDecorRef.current = [];
-    }
+    requestAnimationFrame(() => {
+      if (editorRef.current?.getModel()?.uri.toString() !== modelUri) return;
+      try {
+        bookmarkDecorRef.current = editorRef.current.deltaDecorations(bookmarkDecorRef.current, decors);
+      } catch {
+        bookmarkDecorRef.current = [];
+      }
+    });
   };
 
   const toggleBookmarkAtLine = (line: number) => {
@@ -1405,14 +1410,18 @@ export function App() {
   const updateRainbowDecorations = (editor: import("monaco-editor").editor.IStandaloneCodeEditor) => {
     const model = editor.getModel();
     if (!model) return;
+    const modelUri = model.uri.toString();
     const next = (!plcRainbowEnabledRef.current || model.getLanguageId() !== PLC_LANGUAGE_ID)
       ? []
       : createRainbowDecorations(parseRainbowBlocks(model.getValue()));
-    try {
-      rainbowDecorRef.current = editor.deltaDecorations(rainbowDecorRef.current, next);
-    } catch {
-      rainbowDecorRef.current = [];
-    }
+    requestAnimationFrame(() => {
+      if (editorRef.current?.getModel()?.uri.toString() !== modelUri) return;
+      try {
+        rainbowDecorRef.current = editorRef.current.deltaDecorations(rainbowDecorRef.current, next);
+      } catch {
+        rainbowDecorRef.current = [];
+      }
+    });
   };
 
   const onEditorMount: OnMount = (editor, monaco) => {
