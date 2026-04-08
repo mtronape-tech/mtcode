@@ -1,4 +1,4 @@
-import { Moon, Sun, BadgeCheck } from "lucide-react";
+import { Moon, Sun, Bug, BugOff } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { THEMES } from "../lib/theme";
 import { cn } from "../lib/utils";
@@ -129,7 +129,7 @@ export function StatusBar({
           aria-pressed={plcValidationEnabled}
           onClick={onTogglePlcValidation}
         >
-          <BadgeCheck size={11} />
+          {plcValidationEnabled ? <Bug size={11} /> : <BugOff size={11} />}
         </button>
 
         {/* Theme mode toggle — switches dark↔light within the current family */}
