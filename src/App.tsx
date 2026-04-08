@@ -1345,6 +1345,16 @@ export function App() {
       const idx = prev.findIndex((tab) => tab.id === tabId);
       if (idx < 0) return prev;
       const next = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+      
+      // If closing the last tab, reset all tab-related state to prevent
+      // stale references to search tabs or non-existent models.
+      if (next.length === 0) {
+        setActiveTabId("");
+        setVisibleTabId("");
+        setSearchPanelOpen(false);
+        return next;
+      }
+
       const fallback = next[idx] ?? next[idx - 1] ?? null;
       if (activeTabId === tabId) {
         setActiveTabId(fallback ? fallback.id : "");
