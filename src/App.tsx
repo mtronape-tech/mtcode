@@ -50,14 +50,6 @@ import { Toaster, toast } from "./components/Toaster";
 import { useTheme } from "./context/ThemeContext";
 import { isValidThemeId, THEMES } from "./lib/theme";
 import { HELP_CONTENT } from "./lib/helpContent";
-import {
-  MONACO_THEME_LINEN,
-  MONACO_THEME_MAHOGANY,
-  MONACO_THEME_NORTON_DARK,
-  MONACO_THEME_NORTON_LIGHT,
-  MONACO_THEME_MONOKAI_DARK,
-  MONACO_THEME_MONOKAI_LIGHT,
-} from "./lib/monacoThemes";
 import { matchesBinding, resolveHotkeys, HOTKEY_DEFAULTS, FKEY_DEFAULT_ACTIONS, FKEY_SHORT_LABELS, HOTKEY_LABELS, type HotkeyAction } from "./lib/hotkeys";
 import { registerPlcLanguage, PLC_LANGUAGE_ID } from "./lib/plcLanguage";
 import { registerPlcFormatter, validatePlc } from "./lib/plcFormatter";
@@ -1547,12 +1539,15 @@ export function App() {
 
 
   const beforeEditorMount: BeforeMount = (monaco) => {
-    monaco.editor.defineTheme("mtcode-mahogany",      MONACO_THEME_MAHOGANY);
-    monaco.editor.defineTheme("mtcode-linen",          MONACO_THEME_LINEN);
-    monaco.editor.defineTheme("mtcode-norton-dark",    MONACO_THEME_NORTON_DARK);
-    monaco.editor.defineTheme("mtcode-norton-light",   MONACO_THEME_NORTON_LIGHT);
-    monaco.editor.defineTheme("mtcode-monokai-dark",   MONACO_THEME_MONOKAI_DARK);
-    monaco.editor.defineTheme("mtcode-monokai-light",  MONACO_THEME_MONOKAI_LIGHT);
+    // Register all themes from JSON
+    for (const t of Object.values(THEMES)) {
+      monaco.editor.defineTheme(t.monacoTheme, {
+        base: t.monaco.base,
+        inherit: t.monaco.inherit,
+        rules: t.monaco.rules,
+        colors: t.monaco.colors,
+      });
+    }
     registerPlcLanguage(monaco);
     registerPlcFormatter(monaco, plcValidationEnabledRef);
   };
