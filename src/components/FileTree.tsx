@@ -1,4 +1,4 @@
-import { File, Folder, FolderPlus, SquareChevronLeft, Open, PlusBox } from "pixelarticons/react";
+import { File, Folder, FolderPlus, SquareChevronLeft, PlusBox } from "pixelarticons/react";
 
 /** pixelarticons uses width/height, not size */
 function PixelIcon({ Icon, size = 24, className }: { Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; size?: number; className?: string }) {
@@ -259,7 +259,7 @@ export function FileTree({
           </span>
           <div className="flex items-center gap-1 ml-auto shrink-0">
             <button className={iconBtn} title="Open folder" aria-label="Open folder" onClick={onOpenFolder}>
-              <PixelIcon Icon={Open} size={11} />
+              <PixelIcon Icon={Folder} size={11} />
             </button>
             <button className={iconBtn} title="New file" aria-label="New file" onClick={onNewFile}>
               <PixelIcon Icon={PlusBox} size={11} />
