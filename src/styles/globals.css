@@ -297,7 +297,8 @@
 }
 [data-theme^="norton"] .menu-dropdown-item:disabled {
   background-color: transparent !important;
-  color: #5566AA !important;
+  color: #7788BB !important;
+  cursor: default;
 }
 
 /* 8c ── NC dropdown: navy bg + white text (not gray card / muted text).       */

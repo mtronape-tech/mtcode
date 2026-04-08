@@ -1,4 +1,4 @@
-import { Moon, CloudSun, Bug, BugSharp } from "pixelarticons/react";
+import { Lightbulb, LightbulbOff, Bug, BugSharp } from "pixelarticons/react";
 import { useTheme } from "../context/ThemeContext";
 import { THEMES } from "../lib/theme";
 import { cn } from "../lib/utils";
@@ -143,7 +143,7 @@ export function StatusBar({
           title={THEMES[themeId].mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           onClick={toggleTheme}
         >
-          {THEMES[themeId].mode === "dark" ? <PixelIcon Icon={CloudSun} size={11} /> : <PixelIcon Icon={Moon} size={11} />}
+          {THEMES[themeId].mode === "dark" ? <PixelIcon Icon={Lightbulb} size={11} /> : <PixelIcon Icon={LightbulbOff} size={11} />}
         </button>
       </div>
     </footer>
