@@ -17,6 +17,7 @@ walkdir = "2.5"
 encoding_rs = "0.8"
 notify = "6"
 regex = "1"
+calamine = { version = "0.24", features = ["dates"] }
 
 [features]
 default = ["custom-protocol"]
