@@ -137,6 +137,83 @@ export function OpenFolderIcon({ size = 11, className }: IconProps) {
   );
 }
 
+/** Pixel action icon: file plus (new file) */
+export function FilePlusIcon({ size = 11, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 12 12"
+      fill="none"
+      shapeRendering="crispEdges"
+      className={className}
+    >
+      <polyline
+        points="1,0 1,12 11,12 11,4 7,0 1,0"
+        stroke="currentColor"
+        strokeWidth="1"
+        fill="none"
+      />
+      <polyline points="7,0 7,4 11,4" stroke="currentColor" strokeWidth="1" fill="none" />
+      <line x1="6" y1="6" x2="6" y2="10" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="4" y1="8" x2="8" y2="8" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+/** Pixel action icon: folder plus (new folder) */
+export function FolderPlusIcon({ size = 11, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={Math.round(size * 0.85)}
+      viewBox="0 0 12 10"
+      fill="none"
+      shapeRendering="crispEdges"
+      className={className}
+    >
+      <rect x="0" y="3" width="12" height="7" stroke="currentColor" strokeWidth="1" fill="none" />
+      <polyline points="0,3 0,1 4,1 5,3" stroke="currentColor" strokeWidth="1" fill="none" />
+      <line x1="6" y1="5" x2="6" y2="9" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="4" y1="7" x2="8" y2="7" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+/** Pixel action icon: collapse sidebar */
+export function CollapseIcon({ size = 11, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 10 10"
+      fill="none"
+      shapeRendering="crispEdges"
+      className={className}
+    >
+      <rect x="0" y="0" width="1" height="10" stroke="currentColor" strokeWidth="1" fill="none" />
+      <polyline points="7,1 3,5 7,9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    </svg>
+  );
+}
+
+/** Pixel action icon: expand sidebar */
+export function ExpandIcon({ size = 11, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 10 10"
+      fill="none"
+      shapeRendering="crispEdges"
+      className={className}
+    >
+      <rect x="9" y="0" width="1" height="10" stroke="currentColor" strokeWidth="1" fill="none" />
+      <polyline points="3,1 7,5 3,9" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    </svg>
+  );
+}
+
 /** Pixel action icon: search */
 export function SearchIcon({ size = 11, className }: IconProps) {
   return (
