@@ -1,7 +1,6 @@
 import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import type { editor as MonacoEditor, IRange } from "monaco-editor";
 import { open, save } from "@tauri-apps/api/dialog";
-import { invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
@@ -332,7 +331,6 @@ export function App() {
     if (!tabsRef.current.some((t) => t.dirty)) {
       void (async () => {
         if (!isTauriRuntime()) { window.close(); return; }
-        await invoke("allow_close");
         const { appWindow } = await import("@tauri-apps/api/window");
         await appWindow.close();
       })();
@@ -807,6 +805,21 @@ export function App() {
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
+  // Auto-save all dirty tabs when window is hidden (Alt+Tab, X button, etc.)
+  // This is a safety net for when close cannot be intercepted (Tauri v1 limitation)
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === "hidden") {
+        const dirty = tabsRef.current.filter((t) => t.dirty && !t.path.startsWith("untitled://"));
+        for (const tab of dirty) {
+          void saveFile({ path: tab.path, content: tab.content }).catch(() => { /* ignore */ });
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, []);
+
   useEffect(() => {
     const previousTabId = prevActiveTabRef.current;
     if (autosaveMode === "focusChange" && previousTabId && previousTabId !== activeTabId) {
@@ -895,32 +908,6 @@ export function App() {
       if (payload.done) {
         setProjectSearchBusy(false);
         toast(`Search done: ${payload.totalHits} matches, files: ${payload.scannedFiles}`);
-      }
-    }).then((unlisten) => {
-      if (!active) { unlisten(); return; }
-      detach = unlisten;
-    });
-    return () => { active = false; if (detach) detach(); };
-  }, []);
-
-  // ── Intercept window close request (X button, Alt+F4) ──────────────────────
-  // Rust sends "request-close" when user clicks X. We handle unsaved checks here.
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-    let active = true;
-    let detach: (() => void) | null = null;
-    listen<void>("request-close", () => {
-      if (!active) return;
-      if (!tabsRef.current.some((t) => t.dirty)) {
-        // No unsaved changes — allow close and retry
-        void (async () => {
-          await invoke("allow_close");
-          const { appWindow } = await import("@tauri-apps/api/window");
-          await appWindow.close();
-        })();
-      } else {
-        // Show unsaved dialog
-        setUnsavedCloseOpen(true);
       }
     }).then((unlisten) => {
       if (!active) { unlisten(); return; }
@@ -2153,10 +2140,8 @@ export function App() {
           try {
             await saveAllDirtyTabs();
             setUnsavedCloseOpen(false);
-            // Re-check after save (user may cancel Save As)
             if (tabsRef.current.some((t) => t.dirty)) return;
             if (!isTauriRuntime()) { window.close(); return; }
-            await invoke("allow_close");
             const { appWindow } = await import("@tauri-apps/api/window");
             await appWindow.close();
           } catch (e) {
@@ -2166,7 +2151,6 @@ export function App() {
         onDiscardAndExit={async () => {
           setUnsavedCloseOpen(false);
           if (!isTauriRuntime()) { window.close(); return; }
-          await invoke("allow_close");
           const { appWindow } = await import("@tauri-apps/api/window");
           await appWindow.close();
         }}
