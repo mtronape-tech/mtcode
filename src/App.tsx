@@ -49,6 +49,7 @@ import { KillDialog } from "./components/KillDialog";
 import { CommandPalette, type CommandPaletteItem } from "./components/CommandPalette";
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { Toaster, toast } from "./components/Toaster";
+import { SpreadsheetView } from "./components/SpreadsheetView";
 import { useTheme } from "./context/ThemeContext";
 import { isValidThemeId, THEMES } from "./lib/theme";
 import { HELP_CONTENT } from "./lib/helpContent";
@@ -2128,6 +2129,8 @@ export function App() {
                 onHitClick={(hit) => void openSearchHit(hit)}
                 collapsedByDefault={searchCollapsedByDefault}
               />
+            ) : activeTab?.mode === "spreadsheet" && activeTab.xlsxInfo ? (
+              <SpreadsheetView info={activeTab.xlsxInfo} path={activeTab.path} />
             ) : (
               <Editor
                 theme={monacoTheme}
