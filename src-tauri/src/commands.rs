@@ -830,21 +830,33 @@ pub struct XlsxWorkbookInfo {
 /// Read workbook structure without loading cell data
 #[tauri::command]
 pub fn get_xlsx_info(path: String) -> Result<XlsxWorkbookInfo, String> {
+  eprintln!("[MTCode] Opening workbook at: {}", path);
+  
   let mut workbook = open_workbook_auto(&path)
-    .map_err(|e| format!("Failed to open workbook: {}", e))?;
+    .map_err(|e| {
+      eprintln!("[MTCode] Failed to open workbook: {}", e);
+      format!("Failed to open workbook: {}", e)
+    })?;
+
+  let sheet_names = workbook.sheet_names().to_vec();
+  eprintln!("[MTCode] Found {} sheets: {:?}", sheet_names.len(), sheet_names);
 
   let mut sheets = Vec::new();
-  for name in workbook.sheet_names() {
+  for name in sheet_names {
     // We only need dimensions here, not data
     if let Ok(range) = workbook.worksheet_range(&name) {
       let (rows, cols) = range.get_size();
+      eprintln!("[MTCode] Sheet '{}': {} rows x {} cols", name, rows, cols);
       sheets.push(XlsxSheetInfo {
         name: name.clone(),
         row_count: rows as u32,
         col_count: cols as u32,
       });
+    } else {
+      eprintln!("[MTCode] Failed to read range for sheet: {}", name);
     }
   }
 
+  eprintln!("[MTCode] Returning {} sheets", sheets.len());
   Ok(XlsxWorkbookInfo { sheets })
 }
