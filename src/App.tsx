@@ -2013,6 +2013,7 @@ export function App() {
             onToggleFolder={toggleFolder}
             onFileClick={openFileFromTree}
             onToggleCollapse={toggleSidebar}
+            onOpenFolder={openProjectFolder}
             onStartResize={startSidebarResize}
             selectedTreePath={selectedTreePath}
             creatingFolderIn={creatingFolderIn}

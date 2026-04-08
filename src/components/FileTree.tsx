@@ -1,3 +1,4 @@
+import { FilePlus, FolderPlus, SquareChevronLeft, FolderOpen } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent, KeyboardEvent as ReactKeyboardEvent, ChangeEvent } from "react";
 import { useRef, useEffect, useState } from "react";
 import { cn } from "../lib/utils";
@@ -19,6 +20,7 @@ type Props = {
   onToggleFolder: (path: string) => Promise<void>;
   onFileClick: (path: string) => Promise<void>;
   onToggleCollapse: () => void;
+  onOpenFolder: () => void;
   onStartResize: (event: ReactMouseEvent<HTMLDivElement>) => void;
   selectedTreePath: string | null;
   creatingFolderIn: string | null;
@@ -177,6 +179,7 @@ export function FileTree({
   onToggleFolder,
   onFileClick,
   onToggleCollapse,
+  onOpenFolder,
   onStartResize,
   selectedTreePath,
   creatingFolderIn,
@@ -255,27 +258,22 @@ export function FileTree({
             // {shortName.toUpperCase()}
           </span>
           <div className="flex items-center gap-1 ml-auto shrink-0">
+            <button className={iconBtn} title="Open folder" aria-label="Open folder" onClick={onOpenFolder}>
+              <FolderOpen size={11} />
+            </button>
             <button className={iconBtn} title="New file" aria-label="New file" onClick={onNewFile}>
-              <NewFileIcon size={11} />
+              <FilePlus size={11} />
             </button>
             <button className={iconBtn} title="New folder" aria-label="New folder" onClick={onCreateFolder}>
-              <svg width="11" height="11" viewBox="0 0 12 10" fill="none" shapeRendering="crispEdges">
-                <rect x="0" y="3" width="12" height="7" stroke="currentColor" strokeWidth="1" fill="none" />
-                <polyline points="0,3 0,1 4,1 5,3" stroke="currentColor" strokeWidth="1" fill="none" />
-                <line x1="5" y1="5" x2="5" y2="9" stroke="currentColor" strokeWidth="1.5" />
-                <line x1="3" y1="7" x2="7" y2="7" stroke="currentColor" strokeWidth="1.5" />
-              </svg>
+              <FolderPlus size={11} />
             </button>
-            {/* Collapse button */}
             <button
               className={iconBtn}
               title="Collapse sidebar"
               aria-label="Collapse sidebar"
               onClick={onToggleCollapse}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" shapeRendering="crispEdges">
-                <polyline points="7,1 3,5 7,9" stroke="currentColor" strokeWidth="1.5" fill="none" />
-              </svg>
+              <SquareChevronLeft size={11} />
             </button>
           </div>
         </div>
