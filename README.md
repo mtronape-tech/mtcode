@@ -1,16 +1,28 @@
+# MTCode
+
 ```
-      ___  ___      ___      ___  ___________  ______    ______    ________    _______  
-     /"  |/"  |    |"  \    /"  |("     _   ")/" _  "\  /    " \  |"      "\  /"     "| 
-    /  ///  //      \   \  //   | )__/  \\__/(: ( \___)// ____  \ (.  ___  :)(: ______) 
-   /'  //'  /       /\\  \/.    |    \\_ /    \/ \    /  /    ) :)|: \   ) || \/    |   
-  //  ///  /       |: \.        |    |.  |    //  \ _(: (____/ // (| (___\ || // ___)_  
- /  ///  //        |.  \    /:  |    \:  |   (:   _) \\        /  |:       :)(:      "| 
-|___/|___/         |___|\__/|___|     \__|    \_______)\"_____/   (________/  \_______) 
-                                             
+      ___  ___      ___      ___  ___________  ______    ______    ________    _______
+     /"  |/"  |    |"  \    /"  |("     _   ")/" _  "\  /    " \  |"      "\  /"     "|
+    /  ///  //      \   \  //   | )__/  \\__/(: ( \___)// ____  \ (.  ___  :)(: ______)
+   /'  //'  /       /\\  \/.    |    \\_ /    \/ \    /  /    ) :)|: \   ) || \/    |
+  //  ///  /       |: \.        |    |.  |    //  \ _(: (____/ // (| (___\ || // ___)_
+ /  ///  //        |.  \    /:  |    \:  |   (:   _) \\        /  |:       :)(:      "|
+|___/|___/         |___|\__/|___|     \__|    \_______)\"_____/   (________/  \_______)
+
 ```
 
 Desktop code editor for PLC programming (Mechatronika).
 Built with Tauri + React + Monaco Editor. Targets Windows 7+, works fully offline.
+
+## Downloads
+
+| Platform | Format | Download |
+|---|---|---|
+| **Windows** | NSIS Installer (.exe) | [Latest Release](https://github.com/mtronape-tech/mtcode/releases/latest) |
+| **Linux** | Debian Package (.deb) | [Latest Release](https://github.com/mtronape-tech/mtcode/releases/latest) |
+| **macOS** | Disk Image (.dmg) | [Latest Release](https://github.com/mtronape-tech/mtcode/releases/latest) |
+
+> All releases include embedded WebView2 runtime — no installation required.
 
 ## Features
 
@@ -41,3 +53,13 @@ npm run tauri dev
 ```
 npm run tauri build
 ```
+
+## Release
+
+To create a new release with binaries for all platforms:
+
+```
+release.bat 0.2.0
+```
+
+This updates version numbers, creates a git tag, and pushes to GitHub. GitHub Actions will automatically build installers for Windows, Linux, and macOS, then attach them to a new Release draft.
