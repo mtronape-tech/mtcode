@@ -1,6 +1,7 @@
 {
   "id": "monokai",
   "name": "Monokai",
+  "fontFamily": "JetBrains Mono",
   "dark": {
     "css": {
       "background": "200 10% 15%",
