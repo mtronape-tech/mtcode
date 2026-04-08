@@ -8,6 +8,15 @@ fn main() {
   std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--disable-gpu --disable-gpu-compositing");
 
   tauri::Builder::default()
+    .setup(|app| {
+      // Prevent default window close so JS can handle unsaved changes check.
+      // The window will only actually close when JS calls appWindow.close().
+      let window = app.get_window("main").unwrap();
+      window.on_close_requested(|event| {
+        event.prevent_default();
+      });
+      Ok(())
+    })
     .manage(commands::AppState::new())
     .invoke_handler(tauri::generate_handler![
       commands::open_file,
