@@ -115,7 +115,7 @@ export function MenuBar({
             <button
               ref={(el) => { menuButtonRefs.current[menuKey] = el; }}
               className={cn(
-                "h-[26px] border-0 bg-transparent text-muted-foreground font-mono text-[11px] tracking-wider px-2.5 hover:bg-accent/10 hover:text-foreground transition-colors",
+                "menu-bar-btn h-[26px] border-0 bg-transparent text-muted-foreground font-mono text-[11px] tracking-wider px-2.5 hover:bg-accent/10 hover:text-foreground transition-colors",
                 openMenu === menuKey && "bg-accent/15 text-foreground",
                 focusedMenuIndex === menuIndex && openMenu !== menuKey && "bg-accent/10 text-foreground",
               )}
@@ -148,7 +148,7 @@ export function MenuBar({
                     ) : null}
                     <button
                       className={cn(
-                        "w-full min-h-[30px] border-0 bg-transparent text-muted-foreground flex items-center justify-start gap-3 px-2.5 text-left text-xs hover:bg-accent/15 hover:text-foreground disabled:opacity-40 disabled:cursor-default transition-colors",
+                        "menu-dropdown-item w-full min-h-[30px] border-0 bg-transparent text-muted-foreground flex items-center justify-start gap-3 px-2.5 text-left text-xs hover:bg-accent/15 hover:text-foreground disabled:opacity-40 disabled:cursor-default transition-colors",
                         focusedMenuActionIndex === index && "bg-accent/15 text-foreground",
                       )}
                       role="menuitem"
