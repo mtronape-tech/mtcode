@@ -287,6 +287,19 @@
   border-radius: 0 !important;
 }
 
+/* 8b ── NC menu hover/focus: solid yellow instead of alpha-blended accent.    */
+[data-theme^="norton"] .menu-bar-btn:hover,
+[data-theme^="norton"] .menu-dropdown-item:hover,
+[data-theme^="norton"] .menu-bar-btn:focus-visible,
+[data-theme^="norton"] .menu-dropdown-item:focus-visible {
+  background-color: #ffff52 !important;
+  color: #000080 !important;
+}
+[data-theme^="norton"] .menu-dropdown-item:disabled {
+  background-color: transparent !important;
+  color: #8888CC !important;
+}
+
 /* 9 ── NC Settings dialog: override all CSS vars so the gray card renders with
         dark blue text, and the inner bg-background (category sidebar) also
         gets a slightly darker gray — not the NC blue.                           */
