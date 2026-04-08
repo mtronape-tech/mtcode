@@ -306,8 +306,15 @@
   background-color: #0000AA !important;
   border-color: #57FFFF !important;
 }
-[data-theme^="norton"] .menu-dropdown-item {
+/* Higher specificity: [attr] + 3 classes + element beats Tailwind's single class */
+[data-theme^="norton"] .menu-dropdown-anim .menu-dropdown-item {
   color: #FFFFFF !important;
+}
+[data-theme^="norton"] .menu-dropdown-anim .menu-dropdown-item:disabled {
+  background-color: transparent !important;
+  color: #8899DD !important;
+  cursor: default;
+  opacity: 1 !important;
 }
 [data-theme^="norton"] .menu-dropdown-anim .h-px {
   background-color: #5566AA !important;
