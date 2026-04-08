@@ -49,6 +49,7 @@ import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { Toaster, toast } from "./components/Toaster";
 import { useTheme } from "./context/ThemeContext";
 import { isValidThemeId, THEMES } from "./lib/theme";
+import { HELP_CONTENT } from "./lib/helpContent";
 import {
   MONACO_THEME_LINEN,
   MONACO_THEME_MAHOGANY,
@@ -1242,6 +1243,14 @@ export function App() {
     if (existing) {
       setActiveTabId(existing.id);
       if (switchVisible) setVisibleTabId(existing.id);
+      if (existing.path.startsWith("help://")) {
+        setTimeout(() => {
+          const model = editorRef.current?.getModel();
+          if (model) {
+            monacoRef.current?.editor.setModelLanguage(model, "markdown");
+          }
+        }, 0);
+      }
     } else {
       const newTab: EditorTab = {
         id: `${Date.now()}-${path}`, path, name: fileName(path),
@@ -1250,6 +1259,16 @@ export function App() {
       setTabs((prev) => [...prev, newTab]);
       setActiveTabId(newTab.id);
       if (switchVisible) setVisibleTabId(newTab.id);
+      // Set language for virtual tabs (help:// etc.)
+      if (path.startsWith("help://")) {
+        // Will be set on next model change or via editor ref
+        setTimeout(() => {
+          const model = editorRef.current?.getModel();
+          if (model && path.startsWith("help://")) {
+            monacoRef.current?.editor.setModelLanguage(model, "markdown");
+          }
+        }, 0);
+      }
     }
   };
 
@@ -1295,6 +1314,7 @@ export function App() {
   };
 
   const saveTab = async (tab: EditorTab, mode: "manual" | "auto") => {
+    if (tab.path.startsWith("help://")) return; // virtual tab, not savable
     if (!tab.dirty && !tab.path.startsWith("untitled://")) return;
     try {
       let targetPath = tab.path;
@@ -1923,7 +1943,10 @@ export function App() {
 
     // ── HELP ──────────────────────────────────────────────────────────────────
     help: [
-      { label: "Help", onSelect: () => toast("Ctrl+O Open  Ctrl+S Save  Ctrl+F Find  Ctrl+G GoTo  F2 Bookmark  Alt+↓/↑ Find Next/Prev  Ctrl+Shift+F Project Search") },
+      { label: "Help", onSelect: () => {
+        const HELP_TAB = "help://guide";
+        activateOrAddTab(HELP_TAB, HELP_CONTENT, true);
+      }},
       { label: "About MTCode...", separatorBefore: true, onSelect: () => setAboutOpen(true) },
     ],
   }),
