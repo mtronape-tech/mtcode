@@ -33,8 +33,7 @@
                   "bundle":  {
                                  "active":  true,
                                  "targets":  [
-                                                 "nsis",
-                                                 "zip"
+                                                 "nsis"
                                              ],
                                  "identifier":  "com.mtcode.app",
                                  "resources":  [
