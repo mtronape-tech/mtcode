@@ -1,14 +1,16 @@
-import { FilePlus, FolderPlus, SquareChevronLeft, FolderOpen } from "lucide-react";
-import type { MouseEvent as ReactMouseEvent, KeyboardEvent as ReactKeyboardEvent, ChangeEvent } from "react";
-import { useRef, useEffect, useState } from "react";
-import { cn } from "../lib/utils";
-import type { TreeNode } from "../types";
 import {
   FileIcon,
   FolderIcon,
   FolderOpenIcon,
-  NewFileIcon,
+  FilePlusIcon,
+  FolderPlusIcon,
+  CollapseIcon,
+  OpenFolderIcon,
 } from "./PixelIcons";
+import type { MouseEvent as ReactMouseEvent, KeyboardEvent as ReactKeyboardEvent, ChangeEvent } from "react";
+import { useRef, useEffect, useState } from "react";
+import { cn } from "../lib/utils";
+import type { TreeNode } from "../types";
 
 type Props = {
   headerName: string;
@@ -259,13 +261,13 @@ export function FileTree({
           </span>
           <div className="flex items-center gap-1 ml-auto shrink-0">
             <button className={iconBtn} title="Open folder" aria-label="Open folder" onClick={onOpenFolder}>
-              <FolderOpen size={11} />
+              <OpenFolderIcon size={11} />
             </button>
             <button className={iconBtn} title="New file" aria-label="New file" onClick={onNewFile}>
-              <FilePlus size={11} />
+              <FilePlusIcon size={11} />
             </button>
             <button className={iconBtn} title="New folder" aria-label="New folder" onClick={onCreateFolder}>
-              <FolderPlus size={11} />
+              <FolderPlusIcon size={11} />
             </button>
             <button
               className={iconBtn}
@@ -273,7 +275,7 @@ export function FileTree({
               aria-label="Collapse sidebar"
               onClick={onToggleCollapse}
             >
-              <SquareChevronLeft size={11} />
+              <CollapseIcon size={11} />
             </button>
           </div>
         </div>
