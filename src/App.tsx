@@ -1620,7 +1620,7 @@ export function App() {
       rainbowDecorRef.current = editor.createDecorationsCollection([]);
     }
     if (!plcRainbowEnabledRef.current || model.getLanguageId() !== PLC_LANGUAGE_ID) {
-      try { rainbowDecorRef.current.clear(); } catch { rainbowDecorRef.current = null; }
+      try { rainbowDecorRef.current.set([]); } catch { rainbowDecorRef.current = null; }
       return;
     }
     const next = createRainbowDecorations(parseRainbowBlocks(model.getValue()));
@@ -1734,12 +1734,15 @@ export function App() {
 
     // Re-run when the model is swapped (tab switch)
     editor.onDidChangeModel(() => {
-      try { rainbowDecorRef.current?.clear(); } catch { /* ignore */ }
+      // Null out stale refs immediately — don't call .clear() here,
+      // the old model's view layer is being torn down and DOM is unstable.
       rainbowDecorRef.current = null;
-      try { bookmarkDecorRef.current?.clear(); } catch { /* ignore */ }
       bookmarkDecorRef.current = null;
-      updateRainbowDecorations(editor);
-      updateBookmarkDecorations();
+      // Defer decoration updates until Monaco finishes the model transition.
+      setTimeout(() => {
+        updateRainbowDecorations(editor);
+        updateBookmarkDecorations();
+      }, 0);
       // If validation is currently disabled, ensure markers are cleared on the new model
       const model = editor.getModel();
       if (model && !plcValidationEnabledRef.current) {
