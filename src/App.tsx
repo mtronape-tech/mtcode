@@ -329,7 +329,7 @@ export function App() {
   };
 
   const requestAppClose = () => {
-    if (!hasUnsavedChanges) {
+    if (!tabsRef.current.some((t) => t.dirty)) {
       void (async () => {
         if (!isTauriRuntime()) { window.close(); return; }
         const { appWindow } = await import("@tauri-apps/api/window");
@@ -895,6 +895,33 @@ export function App() {
       if (payload.done) {
         setProjectSearchBusy(false);
         toast(`Search done: ${payload.totalHits} matches, files: ${payload.scannedFiles}`);
+      }
+    }).then((unlisten) => {
+      if (!active) { unlisten(); return; }
+      detach = unlisten;
+    });
+    return () => { active = false; if (detach) detach(); };
+  }, []);
+
+  // ── Intercept window close request (X button, Alt+F4) ──────────────────────
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let active = true;
+    let detach: (() => void) | null = null;
+    listen<void>("tauri://close-requested", () => {
+      if (!active) return;
+      // If close was programmatically allowed (via allowCloseRef), don't intercept
+      if (allowCloseRef.current) return;
+      if (!tabsRef.current.some((t) => t.dirty)) {
+        // No unsaved changes — close immediately
+        void (async () => {
+          const { appWindow } = await import("@tauri-apps/api/window");
+          allowCloseRef.current = true;
+          await appWindow.close();
+        })();
+      } else {
+        // Show unsaved dialog — File → Exit handler already does this
+        setUnsavedCloseOpen(true);
       }
     }).then((unlisten) => {
       if (!active) { unlisten(); return; }
