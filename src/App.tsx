@@ -21,7 +21,6 @@ import {
   runKillScript,
   readFileEncoding,
   saveFileEncoding,
-  getXlsxInfo,
   type AppSettings,
   type AutosaveMode,
   type FileChangedEvent,
@@ -29,11 +28,10 @@ import {
   type ProjectSearchOptions,
   type SearchHit,
   type SearchProgressEvent,
-  type XlsxWorkbookInfo,
   DEFAULT_SEARCH_OPTIONS,
 } from "./services/ipc";
 
-import type { BookmarkMap, EditorTab, EditorTabMode, MenuAction, MenuKey, TreeNode } from "./types";
+import type { BookmarkMap, EditorTab, MenuAction, MenuKey, TreeNode } from "./types";
 
 import { EditorTabs } from "./components/EditorTabs";
 import { ExternalChangeDialog } from "./components/ExternalChangeDialog";
@@ -49,7 +47,6 @@ import { KillDialog } from "./components/KillDialog";
 import { CommandPalette, type CommandPaletteItem } from "./components/CommandPalette";
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { Toaster, toast } from "./components/Toaster";
-import { SpreadsheetView } from "./components/SpreadsheetView";
 import { useTheme } from "./context/ThemeContext";
 import { isValidThemeId, THEMES } from "./lib/theme";
 import { HELP_CONTENT } from "./lib/helpContent";
@@ -1249,7 +1246,7 @@ export function App() {
     }
   };
 
-  const activateOrAddTab = (path: string, content: string, switchVisible = true, mode: EditorTabMode = "text", xlsxInfo?: XlsxWorkbookInfo) => {
+  const activateOrAddTab = (path: string, content: string, switchVisible = true) => {
     // Use tabsRef (always current) to avoid calling setState inside a setState updater
     const existing = tabsRef.current.find((tab) => tab.path === path);
     if (existing) {
@@ -1266,7 +1263,7 @@ export function App() {
     } else {
       const newTab: EditorTab = {
         id: `${Date.now()}-${path}`, path, name: fileName(path),
-        content, savedContent: content, dirty: false, mode, xlsxInfo,
+        content, savedContent: content, dirty: false,
       };
       setTabs((prev) => [...prev, newTab]);
       setActiveTabId(newTab.id);
@@ -1284,11 +1281,6 @@ export function App() {
     }
   };
 
-  const isSpreadsheet = (path: string) => {
-    const ext = path.split(".").pop()?.toLowerCase();
-    return ext === "xlsx" || ext === "xls";
-  };
-
   const openFileFromTree = async (
     path: string,
     cursor?: { line: number; column: number; matchLength?: number },
@@ -1296,20 +1288,8 @@ export function App() {
   ) => {
     setSelectedTreePath(path);
     try {
-      if (isSpreadsheet(path)) {
-        try {
-          const info = await getXlsxInfo(path);
-          activateOrAddTab(path, "", switchVisible, "spreadsheet", info);
-        } catch (xlsxError) {
-          // Create tab with error info so user sees something
-          console.error("Failed to get xlsx info:", xlsxError);
-          activateOrAddTab(path, "", switchVisible, "spreadsheet", { sheets: [] });
-          toast.error(`XLSX Error: ${String(xlsxError)}`);
-        }
-      } else {
-        const result = await openFile(path);
-        activateOrAddTab(result.path, result.content, switchVisible, "text");
-      }
+      const result = await openFile(path);
+      activateOrAddTab(result.path, result.content, switchVisible);
       if (cursor) setPendingCursor(cursor);
       pushRecentFile(path);
     } catch (error) {
@@ -1336,7 +1316,6 @@ export function App() {
       content: "",
       savedContent: "",
       dirty: false,
-      mode: "text",
     };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(id);
@@ -2139,8 +2118,6 @@ export function App() {
                 onHitClick={(hit) => void openSearchHit(hit)}
                 collapsedByDefault={searchCollapsedByDefault}
               />
-            ) : activeTab?.mode === "spreadsheet" && activeTab.xlsxInfo ? (
-              <SpreadsheetView info={activeTab.xlsxInfo} path={activeTab.path} />
             ) : (
               <Editor
                 theme={monacoTheme}

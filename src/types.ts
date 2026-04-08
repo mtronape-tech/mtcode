@@ -1,5 +1,5 @@
 // Shared domain types — imported by App and components alike.
-// Do NOT import from App.tsx here (would be circular).
+// DO NOT import from App.tsx here (would be circular).
 
 export type TreeNode = {
   name: string;
@@ -10,10 +10,6 @@ export type TreeNode = {
   children: TreeNode[];
 };
 
-import type { XlsxWorkbookInfo } from "./services/ipc";
-
-export type EditorTabMode = "text" | "spreadsheet";
-
 export type EditorTab = {
   id: string;
   path: string;
@@ -23,10 +19,6 @@ export type EditorTab = {
   dirty: boolean;
   /** Detected or user-set encoding for save (default "utf-8") */
   encoding?: string;
-  /** Tab mode: standard text editor or spreadsheet viewer */
-  mode: EditorTabMode;
-  /** Spreadsheet metadata (only present if mode === "spreadsheet") */
-  xlsxInfo?: XlsxWorkbookInfo;
 };
 
 export type MenuKey = "file" | "edit" | "search" | "view" | "encoding" | "settings" | "help";
