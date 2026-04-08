@@ -1,16 +1,14 @@
-import {
-  FileIcon,
-  FolderIcon,
-  FolderOpenIcon,
-  FilePlusIcon,
-  FolderPlusIcon,
-  CollapseIcon,
-  OpenFolderIcon,
-} from "./PixelIcons";
+import { File, Folder, FolderPlus, SquareChevronLeft, Open, PlusBox } from "pixelarticons/react";
+
+/** pixelarticons uses width/height, not size */
+function PixelIcon({ Icon, size = 24, className }: { Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; size?: number; className?: string }) {
+  return <Icon width={size} height={size} className={className} />;
+}
 import type { MouseEvent as ReactMouseEvent, KeyboardEvent as ReactKeyboardEvent, ChangeEvent } from "react";
 import { useRef, useEffect, useState } from "react";
 import { cn } from "../lib/utils";
 import type { TreeNode } from "../types";
+import { FolderOpenIcon } from "./PixelIcons";
 
 type Props = {
   headerName: string;
@@ -73,8 +71,8 @@ function TreeNodeItem({
           {node.isDir
             ? node.expanded
               ? <FolderOpenIcon size={11} />
-              : <FolderIcon size={11} />
-            : <FileIcon size={10} />
+              : <PixelIcon Icon={Folder} size={11} />
+            : <PixelIcon Icon={File} size={10} />
           }
         </span>
         <span className="overflow-hidden text-ellipsis ml-0.5">{node.name}</span>
@@ -152,7 +150,7 @@ function InlineCreateFolder({
       <span className="opacity-25 shrink-0 select-none text-[11px] font-mono text-muted-foreground">{prefix}</span>
       <span className="opacity-40 shrink-0 select-none text-[11px] font-mono text-muted-foreground">{connector}</span>
       <span className="shrink-0 inline-flex items-center justify-center opacity-70">
-        <FolderIcon size={11} />
+        <PixelIcon Icon={Folder} size={11} />
       </span>
       <input
         ref={inputRef}
@@ -261,13 +259,13 @@ export function FileTree({
           </span>
           <div className="flex items-center gap-1 ml-auto shrink-0">
             <button className={iconBtn} title="Open folder" aria-label="Open folder" onClick={onOpenFolder}>
-              <OpenFolderIcon size={11} />
+              <PixelIcon Icon={Open} size={11} />
             </button>
             <button className={iconBtn} title="New file" aria-label="New file" onClick={onNewFile}>
-              <FilePlusIcon size={11} />
+              <PixelIcon Icon={PlusBox} size={11} />
             </button>
             <button className={iconBtn} title="New folder" aria-label="New folder" onClick={onCreateFolder}>
-              <FolderPlusIcon size={11} />
+              <PixelIcon Icon={FolderPlus} size={11} />
             </button>
             <button
               className={iconBtn}
@@ -275,7 +273,7 @@ export function FileTree({
               aria-label="Collapse sidebar"
               onClick={onToggleCollapse}
             >
-              <CollapseIcon size={11} />
+              <PixelIcon Icon={SquareChevronLeft} size={11} />
             </button>
           </div>
         </div>

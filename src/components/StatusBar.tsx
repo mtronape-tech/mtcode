@@ -1,9 +1,14 @@
-import { Moon, Sun, Bug, BugOff } from "lucide-react";
+import { Moon, CloudSun, Bug, BugSharp } from "pixelarticons/react";
 import { useTheme } from "../context/ThemeContext";
 import { THEMES } from "../lib/theme";
 import { cn } from "../lib/utils";
 import type { AutosaveMode } from "../services/ipc";
 import type { EditorTab } from "../types";
+
+/** pixelarticons uses width/height, not size */
+function PixelIcon({ Icon, size = 24 }: { Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; size?: number }) {
+  return <Icon width={size} height={size} />;
+}
 
 function languageStatusLabel(languageId: string): string {
   if (languageId === "plaintext") return "TXT";
@@ -129,7 +134,7 @@ export function StatusBar({
           aria-pressed={plcValidationEnabled}
           onClick={onTogglePlcValidation}
         >
-          {plcValidationEnabled ? <Bug size={11} /> : <BugOff size={11} />}
+          {plcValidationEnabled ? <PixelIcon Icon={Bug} size={11} /> : <PixelIcon Icon={BugSharp} size={11} />}
         </button>
 
         {/* Theme mode toggle — switches dark↔light within the current family */}
@@ -138,7 +143,7 @@ export function StatusBar({
           title={THEMES[themeId].mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           onClick={toggleTheme}
         >
-          {THEMES[themeId].mode === "dark" ? <Sun size={11} /> : <Moon size={11} />}
+          {THEMES[themeId].mode === "dark" ? <PixelIcon Icon={CloudSun} size={11} /> : <PixelIcon Icon={Moon} size={11} />}
         </button>
       </div>
     </footer>
