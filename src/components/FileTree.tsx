@@ -13,8 +13,6 @@ type Props = {
   headerName: string;
   treeNodes: TreeNode[];
   busyPath: string;
-  errorText: string;
-  infoText: string;
   sidebarWidth: number;
   onNewFile: () => void;
   onCreateFolder: () => void;
@@ -173,8 +171,6 @@ export function FileTree({
   headerName,
   treeNodes,
   busyPath,
-  errorText,
-  infoText,
   sidebarWidth,
   onNewFile,
   onCreateFolder,
@@ -298,17 +294,7 @@ export function FileTree({
           )}
         </div>
 
-        {/* Notifications — only rendered when needed (no layout gap when empty) */}
-        {errorText ? (
-          <div className="shrink-0 text-[10px] font-mono px-2 py-1 leading-[1.5] overflow-anywhere text-destructive-foreground border border-destructive/45 bg-destructive/15">
-            ERR: {errorText}
-          </div>
-        ) : null}
-        {infoText && !errorText ? (
-          <div className="shrink-0 text-[10px] font-mono px-2 py-1 leading-[1.5] overflow-anywhere text-foreground border border-border bg-accent/10">
-            // {infoText}
-          </div>
-        ) : null}
+        {/* Notifications moved to toast — no static blocks here */}
       </aside>
 
       {/* Resize handle — sidebar-bg matches so no dark gap; border-r is the visible 1px separator */}

@@ -1,4 +1,4 @@
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, BadgeCheck } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { THEMES } from "../lib/theme";
 import { cn } from "../lib/utils";
@@ -37,8 +37,10 @@ type Props = {
   autosaveMode: AutosaveMode;
   autosaveDelayMs: number;
   cursorText: string;
+  plcValidationEnabled: boolean;
   onAutosaveModeChange: (mode: AutosaveMode) => void;
   onDelayChange: (ms: number) => void;
+  onTogglePlcValidation: () => void;
 };
 
 export function StatusBar({
@@ -47,8 +49,10 @@ export function StatusBar({
   autosaveMode,
   autosaveDelayMs,
   cursorText,
+  plcValidationEnabled,
   onAutosaveModeChange,
   onDelayChange,
+  onTogglePlcValidation,
 }: Props) {
   const { themeId, toggleTheme } = useTheme();
 
@@ -111,6 +115,22 @@ export function StatusBar({
         {sep}
         <span className={cn(seg, "px-2")}>{formatCursor(cursorText)}</span>
         {sep}
+
+        {/* PLC validation toggle */}
+        <button
+          type="button"
+          className={cn(
+            "h-[18px] w-[22px] ml-1 inline-flex items-center justify-center transition-colors border",
+            plcValidationEnabled
+              ? "text-foreground border-border bg-input"
+              : "text-muted-foreground border-transparent hover:text-foreground hover:border-border",
+          )}
+          title={plcValidationEnabled ? "PLC validation: ON" : "PLC validation: OFF"}
+          aria-pressed={plcValidationEnabled}
+          onClick={onTogglePlcValidation}
+        >
+          <BadgeCheck size={11} />
+        </button>
 
         {/* Theme mode toggle — switches dark↔light within the current family */}
         <button
