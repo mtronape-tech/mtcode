@@ -85,6 +85,7 @@ export type AppSettings = {
   autosaveDelayMs: number;
   themeId: string;
   fontSize: number;
+  fontFamily: string;
   tabSize: number;
   wordWrap: "off" | "on" | "wordWrapColumn";
   hotkeys: Record<string, string>;

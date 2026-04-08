@@ -13,9 +13,22 @@ import { THEME_FAMILIES } from "../lib/theme";
 import { DEFAULT_RAINBOW_COLORS, DARK_RAINBOW_COLORS, LIGHT_RAINBOW_COLORS } from "../lib/plcRainbowBlocks";
 import { THEMES } from "../lib/theme";
 
+/** Available editor fonts — label shown in dropdown, value is CSS font-family. */
+export const FONTS: { label: string; value: string }[] = [
+  { label: "JetBrains Mono",     value: "JetBrains Mono" },
+  { label: "Fira Code",          value: "Fira Code" },
+  { label: "Cascadia Code",      value: "Cascadia Code" },
+  { label: "Consolas",           value: "Consolas" },
+  { label: "Courier New",        value: "Courier New" },
+  { label: "Source Code Pro",    value: "Source Code Pro" },
+  { label: "IBM Plex Mono",      value: "IBM Plex Mono" },
+  { label: "Roboto Mono",        value: "Roboto Mono" },
+];
+
 export type SettingsDraft = {
   themeId: string;
   fontSize: number;
+  fontFamily: string;
   tabSize: number;
   wordWrap: "off" | "on" | "wordWrapColumn";
   autosaveMode: AutosaveMode;
@@ -233,6 +246,22 @@ export function SettingsModal({ open, initial, onSave, onClose }: Props) {
 
                 <div className="font-mono text-[10px] font-bold tracking-widest text-muted-foreground select-none mt-2 mb-1">
                   // TYPOGRAPHY
+                </div>
+
+                <div className={rowCls}>
+                  <span className={labelColCls}>FONT FAMILY</span>
+                  <select
+                    className={cn(inputCls, "w-[200px]")}
+                    value={draft.fontFamily}
+                    onChange={(e) => set("fontFamily", e.target.value)}
+                    style={{ fontFamily: draft.fontFamily }}
+                  >
+                    {FONTS.map((f) => (
+                      <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className={rowCls}>

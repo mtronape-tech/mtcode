@@ -190,6 +190,7 @@ export function App() {
   const [creatingFolderIn, setCreatingFolderIn] = useState<string | null>(null);
 
   const [fontSize, setFontSize] = useState<number>(13);
+  const [fontFamily, setFontFamily] = useState<string>("JetBrains Mono");
   const [tabSize, setTabSize] = useState<number>(4);
   const [wordWrap, setWordWrap] = useState<"off" | "on" | "wordWrapColumn">("off");
   const [hotkeys, setHotkeys] = useState(HOTKEY_DEFAULTS);
@@ -658,6 +659,7 @@ export function App() {
   const applySettings = (draft: SettingsDraft) => {
     if (isValidThemeId(draft.themeId)) setTheme(draft.themeId);
     setFontSize(draft.fontSize);
+    setFontFamily(draft.fontFamily);
     setTabSize(draft.tabSize);
     setWordWrap(draft.wordWrap);
     setAutosaveMode(draft.autosaveMode);
@@ -733,6 +735,7 @@ export function App() {
         setAutosaveDelayMs(Math.max(250, Number(settings.autosaveDelayMs || 1200)));
         if (settings.themeId && isValidThemeId(settings.themeId)) setTheme(settings.themeId);
         if (settings.fontSize && settings.fontSize >= 9 && settings.fontSize <= 24) setFontSize(settings.fontSize);
+        if (settings.fontFamily) setFontFamily(settings.fontFamily);
         if (settings.tabSize && settings.tabSize >= 1 && settings.tabSize <= 8) setTabSize(settings.tabSize);
         if (settings.wordWrap === "on" || settings.wordWrap === "wordWrapColumn") setWordWrap(settings.wordWrap);
         if (settings.hotkeys) setHotkeys(resolveHotkeys(settings.hotkeys));
@@ -755,7 +758,7 @@ export function App() {
 
   useEffect(() => {
     if (!settingsLoaded || !isTauriRuntime()) return;
-    const payload: AppSettings = { autosaveMode, autosaveDelayMs, themeId, fontSize, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions };
+    const payload: AppSettings = { autosaveMode, autosaveDelayMs, themeId, fontSize, fontFamily, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions };
     void saveSettings(payload);
   }, [autosaveMode, autosaveDelayMs, themeId, fontSize, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions, settingsLoaded]);
 
@@ -2094,7 +2097,7 @@ export function App() {
                     verticalScrollbarSize: 8,
                     horizontalScrollbarSize: 8,
                   },
-                  fontFamily: "JetBrains Mono, Consolas, monospace",
+                  fontFamily: `${fontFamily}, Consolas, monospace`,
                   fontSize: fontSize,
                   tabSize: tabSize,
                   wordWrap: wordWrap,
@@ -2263,6 +2266,7 @@ export function App() {
         initial={{
           themeId,
           fontSize,
+          fontFamily,
           tabSize,
           wordWrap,
           autosaveMode,

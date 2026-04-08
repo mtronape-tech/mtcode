@@ -1,6 +1,7 @@
 {
   "id": "mtcode",
   "name": "MTCode",
+  "fontFamily": "JetBrains Mono",
   "dark": {
     "css": {
       "background": "18 65% 5%",

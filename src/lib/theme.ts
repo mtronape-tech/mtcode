@@ -18,12 +18,14 @@ export type ThemeDefinition = {
   mode: "light" | "dark";
   monacoTheme: string;
   css: Record<string, string>;
+  fontFamily: string;
   monaco: Monaco.editor.IStandaloneThemeData;
 };
 
 type JsonTheme = {
   id: string;
   name: string;
+  fontFamily: string;
   dark: { css: Record<string, string>; monaco: Monaco.editor.IStandaloneThemeData };
   light: { css: Record<string, string>; monaco: Monaco.editor.IStandaloneThemeData };
 };
@@ -44,6 +46,7 @@ function makeTheme(
     mode,
     monacoTheme: `mtcode-${json.id}${suffix}`,
     css: modeData.css,
+    fontFamily: json.fontFamily,
     monaco: modeData.monaco as Monaco.editor.IStandaloneThemeData,
   };
 }
