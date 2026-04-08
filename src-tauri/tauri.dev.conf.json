@@ -1,0 +1,11 @@
+{
+  "tauri": {
+    "bundle": {
+      "windows": {
+        "webviewInstallMode": {
+          "type": "skip"
+        }
+      }
+    }
+  }
+}
