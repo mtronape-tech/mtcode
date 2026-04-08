@@ -244,6 +244,7 @@ export function App() {
 
   const [externalChangedPath, setExternalChangedPath] = useState<string | null>(null);
   const [unsavedCloseOpen, setUnsavedCloseOpen] = useState<boolean>(false);
+  const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
   const allowCloseRef = useRef<boolean>(false);
 
 
@@ -340,6 +341,24 @@ export function App() {
     setUnsavedCloseOpen(true);
   };
 
+  const requestCloseAllTabs = () => {
+    const dirtyTabs = tabsRef.current.filter((t) => t.dirty);
+    if (dirtyTabs.length > 0) {
+      setUnsavedCloseOpen(true);
+    } else {
+      closeAllTabs();
+    }
+  };
+
+  const requestCloseAllButActive = () => {
+    const dirtyOthers = tabsRef.current.filter((t) => t.id !== activeTabId && t.dirty);
+    if (dirtyOthers.length > 0) {
+      setUnsavedCloseOpen(true);
+    } else {
+      closeAllButActive();
+    }
+  };
+
   // ── Close All ────────────────────────────────────────────────────────────────
   const closeAllTabs = () => {
     setTabs([]);
@@ -427,7 +446,7 @@ export function App() {
     if (!window.confirm(`Delete ${activeTab.name}?`)) return;
     try {
       await deleteFile(activeTab.path);
-      closeTab(activeTab.id);
+      closeTabById(activeTab.id);
     } catch (e) {
       toast.error(String(e));
     }
@@ -439,7 +458,7 @@ export function App() {
     if (!window.confirm(`Move ${activeTab.name} to Recycle Bin?`)) return;
     try {
       await moveToTrash(activeTab.path);
-      closeTab(activeTab.id);
+      closeTabById(activeTab.id);
     } catch (e) {
       toast.error(String(e));
     }
@@ -978,7 +997,7 @@ export function App() {
       // Editor / non-input shortcuts
       if (!typingInField && matchesBinding(event, hk.openFile))      { event.preventDefault(); void openSingleFile(); }
       if (!typingInField && matchesBinding(event, hk.save))          { event.preventDefault(); void saveActiveTab(); }
-      if (!typingInField && matchesBinding(event, hk.closeTab))      { event.preventDefault(); if (activeTabId) closeTab(activeTabId); }
+      if (!typingInField && matchesBinding(event, hk.closeTab))      { event.preventDefault(); if (activeTabId) requestCloseTab(activeTabId); }
       if (!typingInField && matchesBinding(event, hk.findInFile))    { event.preventDefault(); openFindPanel("find", editorSelection()); }
       if (!typingInField && matchesBinding(event, hk.replaceInFile)) { event.preventDefault(); openFindPanel("replace", editorSelection()); }
 
@@ -1293,7 +1312,7 @@ export function App() {
     if (tab) await saveTab(tab, mode);
   };
 
-  const closeTab = (tabId: string) => {
+  const closeTabById = (tabId: string) => {
     setTabs((prev) => {
       const idx = prev.findIndex((tab) => tab.id === tabId);
       if (idx < 0) return prev;
@@ -1307,6 +1326,15 @@ export function App() {
       }
       return next;
     });
+  };
+
+  const requestCloseTab = (tabId: string) => {
+    const tab = tabsRef.current.find((t) => t.id === tabId);
+    if (tab?.dirty) {
+      setPendingCloseTabId(tabId);
+    } else {
+      closeTabById(tabId);
+    }
   };
 
 
@@ -1725,8 +1753,8 @@ export function App() {
       case "saveAs":          defer(() => void saveActiveTabAs()); break;
       case "saveAll":         void saveAllTabs(); break;
       case "openFile":        defer(() => void openSingleFile()); break;
-      case "closeTab":        if (activeTabId) closeTab(activeTabId); break;
-      case "closeAll":        closeAllTabs(); break;
+      case "closeTab":        if (activeTabId) requestCloseTab(activeTabId); break;
+      case "closeAll":        requestCloseAllTabs(); break;
       case "findInFile":      defer(() => openFindPanel("find")); break;
       case "replaceInFile":   defer(() => openFindPanel("replace")); break;
       case "findInProject":   defer(() => openProjectSearchPanel()); break;
@@ -1802,9 +1830,9 @@ export function App() {
       { label: "Delete",                                  onSelect: () => void deleteActiveTab(),  disabled: !activeTab || activeTab.path.startsWith("untitled://") },
       { label: "Move to Recycle Bin",                     onSelect: () => void trashActiveTab(),   disabled: !activeTab || activeTab.path.startsWith("untitled://") },
       { label: "Print...",          separatorBefore: true, onSelect: () => window.print(),          disabled: !activeTab },
-      { label: "Close",             shortcut: "Ctrl+W",   onSelect: () => activeTab && closeTab(activeTab.id), disabled: !activeTab, separatorBefore: true },
-      { label: "Close All",         shortcut: "Ctrl+Shift+W", onSelect: closeAllTabs },
-      { label: "Close All But This",                      onSelect: closeAllButActive,              disabled: tabs.length <= 1 },
+      { label: "Close",             shortcut: "Ctrl+W",   onSelect: () => activeTab && requestCloseTab(activeTab.id), disabled: !activeTab, separatorBefore: true },
+      { label: "Close All",         shortcut: "Ctrl+Shift+W", onSelect: requestCloseAllTabs },
+      { label: "Close All But This",                      onSelect: requestCloseAllButActive,              disabled: tabs.length <= 1 },
       { label: "Exit",              separatorBefore: true, onSelect: requestAppClose },
     ],
 
@@ -1975,7 +2003,7 @@ export function App() {
                 closeSearchTabs();
                 return;
               }
-              closeTab(id);
+              requestCloseTab(id);
             }}
             onNewTab={openNewUntitledTab}
           />
@@ -2118,6 +2146,89 @@ export function App() {
         }}
         onCancel={() => setUnsavedCloseOpen(false)}
       />
+
+      {/* Per-tab unsaved changes dialog */}
+      {pendingCloseTabId && (() => {
+        const tab = tabs.find((t) => t.id === pendingCloseTabId);
+        if (!tab) return null;
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-background flex items-center justify-center"
+            style={{
+              backgroundImage: "radial-gradient(circle, hsl(var(--muted-foreground) / 0.12) 1px, transparent 1px)",
+              backgroundSize: "14px 14px",
+            }}
+            onClick={() => setPendingCloseTabId(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Unsaved changes"
+          >
+            <div
+              className="bg-card border-2 border-border flex flex-col"
+              style={{ width: 420, maxWidth: "95vw", boxShadow: "6px 6px 0 hsl(var(--border))" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted shrink-0">
+                <span className="font-mono text-[11px] font-bold tracking-widest text-foreground select-none">
+                  // UNSAVED CHANGES
+                </span>
+                <button
+                  className="font-mono text-[11px] text-muted-foreground hover:text-foreground border border-border px-2 h-[22px] hover:bg-accent/10 transition-colors"
+                  onClick={() => setPendingCloseTabId(null)}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="flex flex-col p-6 gap-4">
+                <div className="font-mono text-[11px] text-muted-foreground leading-relaxed">
+                  <div>{"> Есть несохранённые изменения в файле:"}</div>
+                  <div className="mt-2 text-foreground">• {tab.name || tab.path}</div>
+                  <div className="mt-3 opacity-80">
+                    Сохранить перед закрытием?
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    className="font-mono text-[11px] tracking-wider text-muted-foreground border border-border px-4 h-[26px] hover:text-foreground hover:bg-accent/10 transition-colors"
+                    onClick={() => setPendingCloseTabId(null)}
+                  >
+                    CANCEL
+                  </button>
+                  <button
+                    className="font-mono text-[11px] tracking-wider text-muted-foreground border border-border px-4 h-[26px] hover:text-foreground hover:bg-accent/10 transition-colors"
+                    onClick={() => {
+                      closeTabById(pendingCloseTabId);
+                      setPendingCloseTabId(null);
+                    }}
+                    title="Закрыть без сохранения"
+                  >
+                    DISCARD
+                  </button>
+                  <button
+                    className="font-mono text-[11px] tracking-wider text-primary-foreground bg-primary border border-primary px-4 h-[26px] hover:opacity-90 transition-opacity"
+                    onClick={async () => {
+                      const currentTab = tabsRef.current.find((t) => t.id === pendingCloseTabId);
+                      if (currentTab) {
+                        await saveTab(currentTab, "manual");
+                        // If save succeeded (tab no longer dirty or path changed), close it
+                        const stillDirty = tabsRef.current.some((t) => t.id === pendingCloseTabId && t.dirty);
+                        if (!stillDirty) {
+                          closeTabById(pendingCloseTabId);
+                        }
+                      }
+                      setPendingCloseTabId(null);
+                    }}
+                  >
+                    SAVE & CLOSE
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <SettingsModal
         open={settingsOpen}
