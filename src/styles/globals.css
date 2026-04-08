@@ -297,7 +297,24 @@
 }
 [data-theme^="norton"] .menu-dropdown-item:disabled {
   background-color: transparent !important;
-  color: #8888CC !important;
+  color: #5566AA !important;
+}
+
+/* 8c ── NC dropdown: navy bg + white text (not gray card / muted text).       */
+[data-theme^="norton"] .menu-dropdown-anim {
+  background-color: #0000AA !important;
+  border-color: #57FFFF !important;
+}
+[data-theme^="norton"] .menu-dropdown-item {
+  color: #FFFFFF !important;
+}
+[data-theme^="norton"] .menu-dropdown-anim .h-px {
+  background-color: #5566AA !important;
+}
+[data-theme^="norton"] .menu-dropdown-anim kbd {
+  color: #8899CC !important;
+  border-color: #5566AA !important;
+  background-color: #000088 !important;
 }
 
 /* 9 ── NC Settings dialog: override all CSS vars so the gray card renders with
