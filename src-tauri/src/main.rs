@@ -26,7 +26,6 @@ fn main() {
       commands::run_kill_script,
       commands::read_file_encoding,
       commands::save_file_encoding,
-      commands::get_xlsx_info
     ])
     .run(tauri::generate_context!())
     .expect("error while running mtcode");

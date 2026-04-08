@@ -168,19 +168,3 @@ export function readFileEncoding(path: string, encoding: string) {
 export function saveFileEncoding(path: string, content: string, encoding: string) {
   return invoke<void>("save_file_encoding", { path, content, encoding });
 }
-
-// ── Spreadsheet Support ─────────────────────────────────────────────────────
-
-export type XlsxSheetInfo = {
-  name: string;
-  row_count: number;
-  col_count: number;
-};
-
-export type XlsxWorkbookInfo = {
-  sheets: XlsxSheetInfo[];
-};
-
-export function getXlsxInfo(path: string) {
-  return invoke<XlsxWorkbookInfo>("get_xlsx_info", { path });
-}
