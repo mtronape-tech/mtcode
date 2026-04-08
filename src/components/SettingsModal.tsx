@@ -209,12 +209,10 @@ export function SettingsModal({ open, initial, onSave, onClose }: Props) {
                     value={draft.themeId}
                     onChange={(e) => set("themeId", e.target.value)}
                   >
-                    {THEME_FAMILIES.map((fam) => (
-                      <optgroup key={fam.family} label={fam.label}>
-                        <option value={fam.dark}>Dark</option>
-                        <option value={fam.light}>Light</option>
-                      </optgroup>
-                    ))}
+                    <option value="monokai-dark">Monokai</option>
+                    <option value="mahogany">Mahogany</option>
+                    <option value="linen">Linen</option>
+                    <option value="norton-dark">Norton</option>
                   </select>
                 </div>
 
