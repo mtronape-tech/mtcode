@@ -215,6 +215,8 @@ export function App() {
   plcRainbowEnabledRef.current = plcRainbowEnabled;
   const plcValidationEnabledRef = useRef<boolean>(false);
   plcValidationEnabledRef.current = plcValidationEnabled;
+  const tabSizeRef = useRef<number>(4);
+  tabSizeRef.current = tabSize;
   const plcRainbowColorsRef = useRef<string[]>(DARK_RAINBOW_COLORS);
   plcRainbowColorsRef.current = effectivePalette;
 
@@ -1588,7 +1590,7 @@ export function App() {
       });
     }
     registerPlcLanguage(monaco);
-    registerPlcFormatter(monaco, plcValidationEnabledRef);
+    registerPlcFormatter(monaco, plcValidationEnabledRef, tabSizeRef);
   };
 
   // ── Rainbow decoration updater — called on mount and every content change ──

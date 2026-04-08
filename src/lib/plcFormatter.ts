@@ -43,11 +43,11 @@ function isBlankOrComment(raw: string): boolean {
 
 // ── Formatter ─────────────────────────────────────────────────────────────────
 
-export function formatPlc(source: string): string {
+export function formatPlc(source: string, tabSize: number = 4): string {
   const lines = source.split(/\r?\n/);
   const out: string[] = [];
   let depth = 0;
-  const TAB = "  "; // 2 spaces — change to "\t" if preferred
+  const TAB = " ".repeat(Math.max(1, Math.min(8, tabSize)));
 
   for (const raw of lines) {
     const trimmed = raw.trim();
@@ -315,12 +315,13 @@ export function validatePlc(source: string): PlcError[] {
 export function registerPlcFormatter(
   monaco: typeof Monaco,
   validationEnabledRef: { current: boolean } = { current: true },
+  tabSizeRef: { current: number } = { current: 4 },
 ): void {
   // ── Formatter ──────────────────────────────────────────────────────────────
   monaco.languages.registerDocumentFormattingEditProvider(PLC_LANGUAGE_ID, {
     provideDocumentFormattingEdits(model) {
       const source = model.getValue();
-      const formatted = formatPlc(source);
+      const formatted = formatPlc(source, tabSizeRef.current);
       if (formatted === source) return [];
       return [{
         range: model.getFullModelRange(),

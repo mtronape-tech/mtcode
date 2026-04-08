@@ -10,6 +10,10 @@ dist/
 # Tauri build artifacts (binaries)
 artifacts/
 
+# WebView2 fixed runtime (too large for GitHub - downloaded during CI build)
+src-tauri/webview2-fixed-runtime/
+webview2-fixed-runtime/
+
 # Project docs (reference materials)
 docs/
 
