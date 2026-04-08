@@ -203,45 +203,23 @@ export function SettingsModal({ open, initial, onSave, onClose }: Props) {
                   // THEME
                 </div>
 
-                {/* Theme family grid: one row per family, DARK / LIGHT per row */}
                 <div className="border border-border">
-                  {/* Header */}
-                  <div className="grid border-b border-border bg-muted/40"
-                    style={{ gridTemplateColumns: "1fr 80px 80px" }}>
-                    <span className={cn(labelCls, "px-2 py-1 flex items-center")}>THEME</span>
-                    <span className={cn(labelCls, "px-2 py-1 text-center border-l border-border")}>DARK</span>
-                    <span className={cn(labelCls, "px-2 py-1 text-center border-l border-border")}>LIGHT</span>
-                  </div>
-                  {THEME_FAMILIES.map((fam) => (
-                    <div
-                      key={fam.family}
-                      className="grid border-b border-border last:border-b-0"
-                      style={{ gridTemplateColumns: "1fr 80px 80px" }}
-                    >
-                      <span className="font-mono text-[11px] text-foreground px-2 flex items-center h-[28px] select-none">
-                        {fam.label}
-                      </span>
-                      {([fam.dark, fam.light] as const).map((tid, i) => {
-                        const active = draft.themeId === tid;
-                        return (
-                          <button
-                            key={tid}
-                            type="button"
-                            className={cn(
-                              "h-[28px] font-mono text-[10px] tracking-wider border-l border-border transition-colors select-none",
-                              active
-                                ? "bg-accent/30 text-foreground font-bold"
-                                : "text-muted-foreground hover:text-foreground hover:bg-accent/10",
-                            )}
-                            onClick={() => set("themeId", tid)}
-                            title={`${fam.label} ${i === 0 ? "Dark" : "Light"}`}
-                          >
-                            {active ? "●" : "○"}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
+                  <select
+                    className="w-full h-[28px] border-0 bg-transparent text-foreground font-mono text-[11px] px-2 outline-none"
+                    value={draft.themeId}
+                    onChange={(e) => set("themeId", e.target.value)}
+                  >
+                    {THEME_FAMILIES.map((fam) => (
+                      <optgroup key={fam.family} label={fam.label}>
+                        <option value={fam.dark}>Dark</option>
+                        <option value={fam.light}>Light</option>
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="font-mono text-[10px] text-muted-foreground/50">
+                  // Toggle dark/light with status bar button
                 </div>
 
                 <div className="font-mono text-[10px] font-bold tracking-widest text-muted-foreground select-none mt-2 mb-1">
