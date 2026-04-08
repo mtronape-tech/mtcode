@@ -36,6 +36,9 @@
                                                  "nsis"
                                              ],
                                  "identifier":  "com.mtcode.app",
+                                 "resources":  [
+                                                   "../kill.bat"
+                                               ],
                                  "windows":  {
                                                  "webviewInstallMode":  {
                                                                             "type":  "fixedRuntime",

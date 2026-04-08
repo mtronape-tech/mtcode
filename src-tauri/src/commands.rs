@@ -526,6 +526,50 @@ pub fn move_to_trash(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn create_folder(path: String) -> Result<(), String> {
+  std::fs::create_dir_all(&path)
+    .map_err(|e| format!("create_folder failed for {}: {}", path, e))
+}
+
+#[tauri::command]
+pub fn run_kill_script() -> Result<String, String> {
+  // In production, kill.bat is bundled as a Tauri resource next to the exe.
+  // In dev, it's in the project root.
+  let exe_dir = std::env::current_exe()
+    .ok()
+    .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+  let bat_path = exe_dir.join("kill.bat");
+  if !bat_path.exists() {
+    // Fallback: try project root (dev mode)
+    let project_root = exe_dir.join("..").join("..").join("..");
+    let dev_bat = project_root.join("kill.bat");
+    if dev_bat.exists() {
+      return run_bat(&dev_bat);
+    }
+    return Err(format!("kill.bat not found at {}", bat_path.display()));
+  }
+  run_bat(&bat_path)
+}
+
+fn run_bat(path: &std::path::Path) -> Result<String, String> {
+  let output = std::process::Command::new("cmd.exe")
+    .args(["/C", path.to_str().unwrap_or("")])
+    .output()
+    .map_err(|e| format!("failed to execute kill.bat: {}", e))?;
+  let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+  if stdout == "NOT_FOUND" {
+    return Err("Processes not found — nothing to kill".to_string());
+  }
+  if output.status.success() {
+    Ok("Processes terminated successfully".to_string())
+  } else {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Err(format!("kill.bat failed: {}", stderr))
+  }
+}
+
+#[tauri::command]
 pub fn read_file_encoding(path: String, encoding: String) -> Result<FileOpenResult, String> {
   let bytes = fs::read(&path).map_err(|e| format!("read failed: {}", e))?;
   let content = match encoding.to_lowercase().as_str() {

@@ -3,14 +3,14 @@
  */
 
 const ASCII_LOGO = `
-  ___  ___      ___      ___  ___________  ______    ______    ________    _______
- /"  |/"  |    |"  \\    /"  |("     _   ")/" _  "\\  /    " \\  |"      "\\  /"     "|
-/  ///  //      \\   \\  //   | )__/  \\\\__/(: ( \\___)// ____  \\ (.  ___  :)(: ______)
-/'  //'  /       /\\\\  \\/.    |    \\\\_  /    \\/ \\    /  /    ) :)|: \\   ) || \\/    |
-//  ///  /       |: \\.        |    |.  |    //  \\ _(: (____/ // (| (___|\\  || // ___)_
-/  ///  //        |.  \\    /:  |    \\:  |   (:   _) \\\\        /  |:       :)(:      "|
-|___/|___/         |___|\\__/|___|     \\__|    \\_______)\\\"_____/   (________/  \\_______)
-`.trim();
+      ___  ___      ___      ___  ___________  ______    ______    ________    _______  
+     /"  |/"  |    |"  \\    /"  |("     _   ")/" _  "\\  /    " \\  |"      "\\  /"     "| 
+    /  ///  //      \\   \\  //   | )__/  \\\\__/(: ( \\___)// ____  \\ (.  ___  :)(: ______) 
+   /'  //'  /       /\\\\  \\/.    |    \\\\_ /    \\/ \\    /  /    ) :)|: \\   ) || \\/    |   
+  //  ///  /       |: \\.        |    |.  |    //  \\ _(: (____/ // (| (___\\ || // ___)_  
+ /  ///  //        |.  \\    /:  |    \\:  |   (:   _) \\\\        /  |:       :)(:      "| 
+|___/|___/         |___|\\__/|___|     \\__|    \\_______)\\"_____/   (________/  \\_______) 
+`.slice(1);
 
 type Props = {
   open: boolean;
@@ -45,14 +45,16 @@ export function AboutDialog({ open, onClose, version = "0.1.0" }: Props) {
         </div>
 
         {/* Body */}
-        <div className="flex flex-col p-6 gap-5">
+        <div className="flex flex-col p-6 gap-5 overflow-hidden">
           {/* ASCII art */}
-          <pre
-            className="font-mono text-[8px] leading-tight text-primary select-all overflow-x-auto"
-            style={{ letterSpacing: "0.02em" }}
-          >
-            {ASCII_LOGO}
-          </pre>
+          <div className="overflow-x-auto">
+            <pre
+              className="font-mono text-[8px] leading-tight text-primary select-all whitespace-pre"
+              style={{ letterSpacing: "0.02em" }}
+            >
+              {ASCII_LOGO}
+            </pre>
+          </div>
 
           {/* Info block */}
           <div className="font-mono text-[11px] text-muted-foreground space-y-1 select-none">

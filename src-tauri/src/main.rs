@@ -22,6 +22,8 @@ fn main() {
       commands::rename_file,
       commands::delete_file,
       commands::move_to_trash,
+      commands::create_folder,
+      commands::run_kill_script,
       commands::read_file_encoding,
       commands::save_file_encoding
     ])

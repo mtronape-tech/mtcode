@@ -18,6 +18,7 @@ import {
   deleteFile,
   moveToTrash,
   createFolder,
+  runKillScript,
   readFileEncoding,
   saveFileEncoding,
   type AppSettings,
@@ -42,6 +43,7 @@ import { StatusBar } from "./components/StatusBar";
 import { SettingsModal, type SettingsDraft } from "./components/SettingsModal";
 import { AboutDialog } from "./components/AboutDialog";
 import { GoToDialog } from "./components/GoToDialog";
+import { KillDialog } from "./components/KillDialog";
 import { CommandPalette, type CommandPaletteItem } from "./components/CommandPalette";
 import { useTheme } from "./context/ThemeContext";
 import { isValidThemeId, THEMES } from "./lib/theme";
@@ -220,6 +222,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [aboutOpen, setAboutOpen] = useState<boolean>(false);
   const [goToOpen, setGoToOpen] = useState<boolean>(false);
+  const [killDialogOpen, setKillDialogOpen] = useState<boolean>(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const [fkeyActions, setFkeyActions] = useState<(string | null)[]>(FKEY_DEFAULT_ACTIONS);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
@@ -903,9 +906,9 @@ export function App() {
 
       // IDE-wide shortcuts (use hotkeysRef.current — avoids stale closure)
       const hk = hotkeysRef.current;
-      if (matchesBinding(event, hk.findInProject)) { event.preventDefault(); openProjectSearchPanel(editorSelection()); return; }
-      if (matchesBinding(event, hk.settings))        { event.preventDefault(); setSettingsOpen(true); return; }
-      if (matchesBinding(event, hk.commandPalette))  { event.preventDefault(); setCommandPaletteOpen(true); return; }
+      if (matchesBinding(event, hk.findInProject)) { event.preventDefault(); event.stopPropagation(); openProjectSearchPanel(editorSelection()); return; }
+      if (matchesBinding(event, hk.settings))        { event.preventDefault(); event.stopPropagation(); setSettingsOpen(true); return; }
+      if (matchesBinding(event, hk.commandPalette))  { event.preventDefault(); event.stopPropagation(); setCommandPaletteOpen(true); return; }
 
       // Editor / non-input shortcuts
       if (!typingInField && matchesBinding(event, hk.openFile))      { event.preventDefault(); void openSingleFile(); }
@@ -919,7 +922,7 @@ export function App() {
         const fIdx = parseInt(key.slice(1), 10) - 1;
         if (fIdx >= 0 && fIdx < fkeyActions.length) {
           const action = fkeyActions[fIdx];
-          if (action) { event.preventDefault(); executeAction(action); return; }
+          if (action) { event.preventDefault(); event.stopPropagation(); executeAction(action); return; }
         }
       }
 
@@ -1092,6 +1095,30 @@ export function App() {
 
   const cancelCreateFolder = () => {
     setCreatingFolderIn(null);
+  };
+
+  const runKill = async () => {
+    if (!isTauriRuntime()) {
+      setErrorText("This action is available only in Tauri runtime.");
+      return;
+    }
+    setErrorText("");
+    try {
+      const result = await runKillScript();
+      setInfoText(result);
+    } catch (error) {
+      const msg = String(error);
+      if (msg.includes("not found") || msg.includes("NOT_FOUND")) {
+        setInfoText("CNC processes are not running — nothing to kill.");
+      } else {
+        setErrorText(`Kill script failed: ${msg}`);
+      }
+    }
+  };
+
+  const handleKillConfirm = () => {
+    setKillDialogOpen(false);
+    void runKill();
   };
 
   const toggleFolder = async (path: string) => {
@@ -1441,9 +1468,9 @@ export function App() {
         ._standaloneKeybindingService;
       kbs.addDynamicKeybinding("-editor.action.quickCommand", undefined, () => {});
     } catch { /* ignore if internal API changes */ }
-    editor.addCommand(monaco.KeyCode.F1, () => {
-      editorActionsRef.current.openCommandPalette();
-    });
+    // F1 is handled by the window-level keydown listener (capture phase) before
+    // Monaco sees it, so no editor.addCommand needed for F1.
+    // Ctrl+Shift+P is not in the window listener, so keep it here as a fallback.
     editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP,
       () => { editorActionsRef.current.openCommandPalette(); },
@@ -1600,6 +1627,7 @@ export function App() {
       case "settings":        defer(() => setSettingsOpen(true)); break;
       case "toggleFold":      editorCommand("editor.toggleFold"); break;
       case "wordWrap":        setWordWrap((w) => (w === "off" ? "on" : "off")); break;
+      case "killScript":      defer(() => setKillDialogOpen(true)); break;
     }
   };
 
@@ -1985,6 +2013,12 @@ export function App() {
         maxCol={editorRef.current?.getModel()?.getLineMaxColumn(
           parseInt(cursorText.match(/Ln\s*(\d+)/)?.[1] ?? "1", 10)) ?? 1}
         onGoTo={handleGoTo}
+      />
+
+      <KillDialog
+        open={killDialogOpen}
+        onConfirm={handleKillConfirm}
+        onCancel={() => setKillDialogOpen(false)}
       />
 
       <CommandPalette

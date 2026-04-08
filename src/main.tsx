@@ -1,4 +1,3 @@
-import React from "react";
 import ReactDOM from "react-dom/client";
 import { loader } from "@monaco-editor/react";
 import { App } from "./App";
@@ -41,6 +40,13 @@ function showFatalError(message: string) {
 window.addEventListener("error", (event) => {
   const message = String(event.error ?? event.message ?? "Unknown runtime error");
   if (isIgnorableRuntimeError(message)) return;
+  // DEV: log full stack to console instead of killing UI — helps diagnose removeChild origin
+  if (import.meta.env.DEV) {
+    console.error("[MTCode fatal]", event.error ?? event.message);
+    console.error("[MTCode stack]", event.error?.stack ?? "(no stack)");
+    event.preventDefault(); // prevent default browser error handling but keep UI alive
+    return;
+  }
   showFatalError(message);
 });
 
@@ -57,11 +63,9 @@ try {
   if (!rootEl) throw new Error("Root element #root was not found");
 
   ReactDOM.createRoot(rootEl).render(
-    <React.StrictMode>
-      <ThemeProvider>
-        <App />
-      </ThemeProvider>
-    </React.StrictMode>
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   );
 } catch (error) {
   const text = error instanceof Error ? error.stack ?? error.message : String(error);

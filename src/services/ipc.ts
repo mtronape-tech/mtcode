@@ -156,6 +156,10 @@ export function createFolder(path: string) {
   return invoke<void>("create_folder", { path });
 }
 
+export function runKillScript() {
+  return invoke<string>("run_kill_script");
+}
+
 export function readFileEncoding(path: string, encoding: string) {
   return invoke<FileOpenResult>("read_file_encoding", { path, encoding });
 }

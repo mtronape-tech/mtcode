@@ -22,13 +22,26 @@ export function CommandPalette({ open, items, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // All hooks must be called unconditionally — before any early return
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setFocusedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 0);
-    }
+    if (!open) return;
+    setQuery("");
+    setFocusedIndex(0);
+    setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
+
+  // Scroll focused item into view
+  useEffect(() => {
+    if (!open) return;
+    const el = listRef.current?.querySelector(`[data-idx="${focusedIndex}"]`) as HTMLElement | null;
+    el?.scrollIntoView({ block: "nearest" });
+  }, [focusedIndex, open]);
+
+  // Reset focused index when filter query changes
+  useEffect(() => {
+    if (!open) return;
+    setFocusedIndex(0);
+  }, [query, open]);
 
   if (!open) return null;
 
@@ -53,15 +66,6 @@ export function CommandPalette({ open, items, onClose }: Props) {
       if (item) { onClose(); item.onSelect(); }
     }
   };
-
-  // Scroll focused item into view
-  useEffect(() => {
-    const el = listRef.current?.querySelector(`[data-idx="${focusedIndex}"]`) as HTMLElement | null;
-    el?.scrollIntoView({ block: "nearest" });
-  }, [focusedIndex]);
-
-  // Reset focused index when filter changes
-  useEffect(() => { setFocusedIndex(0); }, [query]);
 
   return (
     <div

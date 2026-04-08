@@ -63,6 +63,14 @@
   overflow: hidden;
 }
 
+/* Bookmark glyph in glyph margin */
+.bookmark-glyph {
+  background-color: hsl(var(--primary)) !important;
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 0 !important;
+}
+
 .editor-host .monaco-editor,
 .editor-host .monaco-editor-background,
 .editor-host .monaco-editor .margin,
