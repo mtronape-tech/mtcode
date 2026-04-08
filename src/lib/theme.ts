@@ -1,3 +1,9 @@
+// Theme definitions loaded from JSON in /themes/
+import monokaiTheme from "../../themes/monokai.json";
+import mtcodeTheme  from "../../themes/mtcode.json";
+import nortonTheme  from "../../themes/norton.json";
+import type * as Monaco from "monaco-editor";
+
 export type ThemeId =
   | "linen" | "mahogany"
   | "norton-dark" | "norton-light"
@@ -11,51 +17,51 @@ export type ThemeDefinition = {
   family: ThemeFamily;
   mode: "light" | "dark";
   monacoTheme: string;
+  css: Record<string, string>;
+  monaco: Monaco.editor.IStandaloneThemeData;
 };
 
+type JsonTheme = {
+  id: string;
+  name: string;
+  dark: { css: Record<string, string>; monaco: Monaco.editor.IStandaloneThemeData };
+  light: { css: Record<string, string>; monaco: Monaco.editor.IStandaloneThemeData };
+};
+
+// Helper: build ThemeDefinition from JSON entry
+function makeTheme(
+  family: ThemeFamily,
+  familyName: string,
+  mode: "dark" | "light",
+  json: JsonTheme,
+): ThemeDefinition {
+  const modeData = json[mode];
+  const suffix = mode === "dark" ? "-dark" : "-light";
+  return {
+    id: (json.id + suffix) as ThemeId,
+    name: familyName,
+    family,
+    mode,
+    monacoTheme: `mtcode-${json.id}${suffix}`,
+    css: modeData.css,
+    monaco: modeData.monaco as Monaco.editor.IStandaloneThemeData,
+  };
+}
+
+const _monokai = monokaiTheme as unknown as JsonTheme;
+const _mtcode  = mtcodeTheme  as unknown as JsonTheme;
+const _norton  = nortonTheme  as unknown as JsonTheme;
+
 export const THEMES: Record<ThemeId, ThemeDefinition> = {
-  mahogany: {
-    id: "mahogany",
-    name: "Mahogany",
-    family: "mtcode",
-    mode: "dark",
-    monacoTheme: "mtcode-mahogany",
-  },
-  linen: {
-    id: "linen",
-    name: "Linen",
-    family: "mtcode",
-    mode: "light",
-    monacoTheme: "mtcode-linen",
-  },
-  "norton-dark": {
-    id: "norton-dark",
-    name: "Norton",
-    family: "norton",
-    mode: "dark",
-    monacoTheme: "mtcode-norton-dark",
-  },
-  "norton-light": {
-    id: "norton-light",
-    name: "Norton",
-    family: "norton",
-    mode: "light",
-    monacoTheme: "mtcode-norton-light",
-  },
-  "monokai-dark": {
-    id: "monokai-dark",
-    name: "Monokai",
-    family: "monokai",
-    mode: "dark",
-    monacoTheme: "mtcode-monokai-dark",
-  },
-  "monokai-light": {
-    id: "monokai-light",
-    name: "Monokai",
-    family: "monokai",
-    mode: "light",
-    monacoTheme: "mtcode-monokai-light",
-  },
+  // Monokai
+  "monokai-dark":  makeTheme("monokai", "Monokai", "dark",  _monokai),
+  "monokai-light": makeTheme("monokai", "Monokai", "light", _monokai),
+  // MTCode
+  mahogany:  makeTheme("mtcode", "MTCode", "dark",  _mtcode),
+  linen:     makeTheme("mtcode", "MTCode", "light", _mtcode),
+  // Norton
+  "norton-dark":  makeTheme("norton", "Norton", "dark",  _norton),
+  "norton-light": makeTheme("norton", "Norton", "light", _norton),
 };
 
 /** All themes grouped by family, in display order. */
