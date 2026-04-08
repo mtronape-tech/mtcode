@@ -1,6 +1,7 @@
 import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import type { editor as MonacoEditor, IRange } from "monaco-editor";
 import { open, save } from "@tauri-apps/api/dialog";
+import { invoke } from "@tauri-apps/api/tauri";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
@@ -245,7 +246,6 @@ export function App() {
   const [externalChangedPath, setExternalChangedPath] = useState<string | null>(null);
   const [unsavedCloseOpen, setUnsavedCloseOpen] = useState<boolean>(false);
   const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
-  const allowCloseRef = useRef<boolean>(false);
 
 
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
@@ -332,8 +332,8 @@ export function App() {
     if (!tabsRef.current.some((t) => t.dirty)) {
       void (async () => {
         if (!isTauriRuntime()) { window.close(); return; }
+        await invoke("allow_close");
         const { appWindow } = await import("@tauri-apps/api/window");
-        allowCloseRef.current = true;
         await appWindow.close();
       })();
       return;
@@ -904,23 +904,22 @@ export function App() {
   }, []);
 
   // ── Intercept window close request (X button, Alt+F4) ──────────────────────
+  // Rust sends "request-close" when user clicks X. We handle unsaved checks here.
   useEffect(() => {
     if (!isTauriRuntime()) return;
     let active = true;
     let detach: (() => void) | null = null;
-    listen<void>("tauri://close-requested", () => {
+    listen<void>("request-close", () => {
       if (!active) return;
-      // If close was programmatically allowed (via allowCloseRef), don't intercept
-      if (allowCloseRef.current) return;
       if (!tabsRef.current.some((t) => t.dirty)) {
-        // No unsaved changes — close immediately
+        // No unsaved changes — allow close and retry
         void (async () => {
+          await invoke("allow_close");
           const { appWindow } = await import("@tauri-apps/api/window");
-          allowCloseRef.current = true;
           await appWindow.close();
         })();
       } else {
-        // Show unsaved dialog — File → Exit handler already does this
+        // Show unsaved dialog
         setUnsavedCloseOpen(true);
       }
     }).then((unlisten) => {
@@ -2157,8 +2156,8 @@ export function App() {
             // Re-check after save (user may cancel Save As)
             if (tabsRef.current.some((t) => t.dirty)) return;
             if (!isTauriRuntime()) { window.close(); return; }
+            await invoke("allow_close");
             const { appWindow } = await import("@tauri-apps/api/window");
-            allowCloseRef.current = true;
             await appWindow.close();
           } catch (e) {
             toast.error(String(e));
@@ -2167,8 +2166,8 @@ export function App() {
         onDiscardAndExit={async () => {
           setUnsavedCloseOpen(false);
           if (!isTauriRuntime()) { window.close(); return; }
+          await invoke("allow_close");
           const { appWindow } = await import("@tauri-apps/api/window");
-          allowCloseRef.current = true;
           await appWindow.close();
         }}
         onCancel={() => setUnsavedCloseOpen(false)}

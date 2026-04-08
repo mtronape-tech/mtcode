@@ -2,6 +2,10 @@
 
 mod commands;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static ALLOW_CLOSE: AtomicBool = AtomicBool::new(false);
+
 fn main() {
   // Win7/legacy GPU safety: prevent blank WebView2 surface on problematic drivers.
   #[cfg(target_os = "windows")]
@@ -9,11 +13,18 @@ fn main() {
 
   tauri::Builder::default()
     .setup(|app| {
-      // Prevent default window close so JS can handle unsaved changes check.
-      // The window will only actually close when JS calls appWindow.close().
+      // Intercept close to check for unsaved changes on JS side.
+      // If ALLOW_CLOSE is true (set via JS invoke), let it through.
+      // Otherwise prevent default so JS can show the unsaved dialog.
       let window = app.get_window("main").unwrap();
-      window.on_close_requested(|event| {
+      let win_clone = window.clone();
+      window.on_close_requested(move |event| {
+        if ALLOW_CLOSE.load(Ordering::SeqCst) {
+          return; // allow close
+        }
         event.prevent_default();
+        // Tell JS to show unsaved dialog
+        let _ = win_clone.emit("request-close", ());
       });
       Ok(())
     })
@@ -34,8 +45,15 @@ fn main() {
       commands::create_folder,
       commands::run_kill_script,
       commands::read_file_encoding,
-      commands::save_file_encoding
+      commands::save_file_encoding,
+      allow_close
     ])
     .run(tauri::generate_context!())
     .expect("error while running mtcode");
+}
+
+/// Tauri command to allow the window close from JS side
+#[tauri::command]
+fn allow_close() {
+  ALLOW_CLOSE.store(true, Ordering::SeqCst);
 }
