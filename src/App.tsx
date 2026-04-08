@@ -1297,8 +1297,15 @@ export function App() {
     setSelectedTreePath(path);
     try {
       if (isSpreadsheet(path)) {
-        const info = await getXlsxInfo(path);
-        activateOrAddTab(path, "", switchVisible, "spreadsheet", info);
+        try {
+          const info = await getXlsxInfo(path);
+          activateOrAddTab(path, "", switchVisible, "spreadsheet", info);
+        } catch (xlsxError) {
+          // Create tab with error info so user sees something
+          console.error("Failed to get xlsx info:", xlsxError);
+          activateOrAddTab(path, "", switchVisible, "spreadsheet", { sheets: [] });
+          toast.error(`XLSX Error: ${String(xlsxError)}`);
+        }
       } else {
         const result = await openFile(path);
         activateOrAddTab(result.path, result.content, switchVisible, "text");
