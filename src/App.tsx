@@ -912,6 +912,20 @@ export function App() {
     return () => { active = false; if (detach) detach(); };
   }, []);
 
+  // Auto-close search panel when all tabs are closed
+  useEffect(() => {
+    if (tabs.length === 0 && searchPanelOpen) {
+      setSearchPanelOpen(false);
+      setVisibleTabId("");
+      setFindQuery("");
+      setProjectSearchQuery("");
+      setProjectSearchHits([]);
+      setProjectSearchScannedFiles(0);
+      setProjectSearchTotalHits(0);
+      setProjectSearchBusy(false);
+    }
+  }, [tabs.length, searchPanelOpen]);
+
   useEffect(() => {
     let active = true;
     let detach: (() => void) | null = null;
@@ -1345,13 +1359,12 @@ export function App() {
       const idx = prev.findIndex((tab) => tab.id === tabId);
       if (idx < 0) return prev;
       const next = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
-      
+
       // If closing the last tab, reset all tab-related state to prevent
       // stale references to search tabs or non-existent models.
       if (next.length === 0) {
         setActiveTabId("");
         setVisibleTabId("");
-        setSearchPanelOpen(false);
         return next;
       }
 
@@ -1364,6 +1377,19 @@ export function App() {
       }
       return next;
     });
+    // Reset search state after close — done outside setTabs so it fires reliably
+    if (tabs.length <= 1) {
+      setSearchPanelOpen(false);
+      setFindQuery("");
+      setProjectSearchQuery("");
+      setProjectSearchHits([]);
+      setProjectSearchScannedFiles(0);
+      setProjectSearchTotalHits(0);
+      setProjectSearchBusy(false);
+      // Ensure visibleTabId doesn't point to a search tab that no longer exists
+      setVisibleTabId("");
+      setEditorMountVersion((v) => v + 1);
+    }
   };
 
   const requestCloseTab = (tabId: string) => {
