@@ -42,7 +42,7 @@
                                  "windows":  {
                                                  "webviewInstallMode":  {
                                                                             "type":  "fixedRuntime",
-                                                                            "path":  "./webview2-fixed-runtime/x64"
+                                                                            "path":  "../webview2-fixed-runtime/x64"
                                                                         }
                                              },
                                  "icon":  [
