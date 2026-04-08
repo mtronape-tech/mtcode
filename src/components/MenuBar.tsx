@@ -148,7 +148,7 @@ export function MenuBar({
                     ) : null}
                     <button
                       className={cn(
-                        "menu-dropdown-item w-full min-h-[30px] border-0 bg-transparent text-muted-foreground flex items-center justify-start gap-3 px-2.5 text-left text-xs hover:bg-accent/15 hover:text-foreground disabled:opacity-40 disabled:cursor-default transition-colors",
+                        "menu-dropdown-item w-full min-h-[30px] border-0 bg-transparent text-muted-foreground flex items-center justify-start gap-3 px-2.5 text-left text-xs hover:bg-accent/15 hover:text-foreground disabled:cursor-default transition-colors",
                         focusedMenuActionIndex === index && "bg-accent/15 text-foreground",
                       )}
                       role="menuitem"
