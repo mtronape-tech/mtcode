@@ -7,14 +7,10 @@ src-tauri/target/
 # Frontend build output
 dist/
 
-# Tauri build artifacts (binaries, WebView2 runtime)
+# Tauri build artifacts (binaries)
 artifacts/
 
-# WebView2 fixed runtime (large binary files, not for git)
-src-tauri/webview2-fixed-runtime/
-webview2-fixed-runtime/
-
-# Project docs (reference materials, binaries)
+# Project docs (reference materials)
 docs/
 
 # Editor / OS
@@ -30,9 +26,6 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
-
-# Docs
-docs
 
 # Redactors
 .vscode
