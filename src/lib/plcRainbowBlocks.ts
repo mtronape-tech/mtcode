@@ -108,7 +108,8 @@ export function parseRainbowBlocks(text: string): BlockMatch[] {
   // Order matters: longer patterns before shorter ones so alternation is safe.
   // With \b on both sides, shorter alternatives can't accidentally match
   // substrings of longer ones — but listing ENDIF before IF is good practice.
-  const keywordRe = /\b(ENDIF|ENDWHILE|CLOSE|ELSE|IF|WHILE|OPEN)\b/gi;
+  // #ifdef / #ifndef / #else / #endif: # is not a word char so no \b prefix needed.
+  const keywordRe = /\b(ENDIF|ENDWHILE|CLOSE|ELSE|IF|WHILE|OPEN)\b|(#ifdef|#ifndef|#else|#endif)\b/gi;
 
   for (let lineIdx = 0; lineIdx < rawLines.length; lineIdx++) {
     const lineNum = lineIdx + 1;
@@ -148,20 +149,22 @@ export function parseRainbowBlocks(text: string): BlockMatch[] {
     let match: RegExpExecArray | null;
 
     while ((match = keywordRe.exec(line)) !== null) {
-      const keyword = match[1].toUpperCase();
-      const colStart = match.index + 1;           // 1-based
-      const colEnd = colStart + match[1].length;   // exclusive, 1-based
+      // Group 1: PLC keywords (IF/WHILE/OPEN/ENDIF/…)
+      // Group 2: preprocessor directives (#ifdef/#ifndef/#else/#endif)
+      const raw = match[1] ?? match[2];
+      if (!raw) continue;
+      const keyword = raw.toUpperCase();
+      const colStart = match.index + 1;       // 1-based
+      const colEnd = colStart + raw.length;   // exclusive, 1-based
 
-      if (keyword === "ENDIF" || keyword === "ENDWHILE" || keyword === "CLOSE") {
-        // Closer: decrement first so opener & closer share the same color
+      if (keyword === "ENDIF" || keyword === "ENDWHILE" || keyword === "CLOSE" || keyword === "#ENDIF") {
         depth = Math.max(0, depth - 1);
         matches.push({ lineNum, startCol: colStart, endCol: colEnd, depth: depth % 10 });
-      } else if (keyword === "ELSE") {
-        // Middle: same level as the IF that started the block
+      } else if (keyword === "ELSE" || keyword === "#ELSE") {
         const d = Math.max(0, depth - 1);
         matches.push({ lineNum, startCol: colStart, endCol: colEnd, depth: d % 10 });
       } else {
-        // Opener (IF / WHILE / OPEN): use current depth, then increment
+        // Opener: IF / WHILE / OPEN / #ifdef / #ifndef
         matches.push({ lineNum, startCol: colStart, endCol: colEnd, depth: depth % 10 });
         depth++;
       }

@@ -45,6 +45,8 @@ import { AboutDialog } from "./components/AboutDialog";
 import { GoToDialog } from "./components/GoToDialog";
 import { KillDialog } from "./components/KillDialog";
 import { CommandPalette, type CommandPaletteItem } from "./components/CommandPalette";
+import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
+import { Toaster, toast } from "./components/Toaster";
 import { useTheme } from "./context/ThemeContext";
 import { isValidThemeId, THEMES } from "./lib/theme";
 import {
@@ -57,6 +59,7 @@ import {
 } from "./lib/monacoThemes";
 import { matchesBinding, resolveHotkeys, HOTKEY_DEFAULTS, FKEY_DEFAULT_ACTIONS, FKEY_SHORT_LABELS, HOTKEY_LABELS, type HotkeyAction } from "./lib/hotkeys";
 import { registerPlcLanguage, PLC_LANGUAGE_ID } from "./lib/plcLanguage";
+import { registerPlcFormatter, validatePlc } from "./lib/plcFormatter";
 import {
   applyRainbowColors,
   parseRainbowBlocks,
@@ -166,8 +169,7 @@ export function App() {
 
   const [cursorText, setCursorText] = useState<string>("Ln 1, Col 1");
   const [busyPath, setBusyPath] = useState<string>("");
-  const [errorText, setErrorText] = useState<string>("");
-  const [infoText, setInfoText] = useState<string>("");
+  // errorText/infoText replaced by toast notifications
 
   const [autosaveMode, setAutosaveMode] = useState<AutosaveMode>("off");
   const [autosaveDelayMs, setAutosaveDelayMs] = useState<number>(1200);
@@ -200,6 +202,7 @@ export function App() {
   const [hotkeys, setHotkeys] = useState(HOTKEY_DEFAULTS);
   const [searchCollapsedByDefault, setSearchCollapsedByDefault] = useState<boolean>(false);
   const [plcRainbowEnabled, setPlcRainbowEnabled] = useState<boolean>(true);
+  const [plcValidationEnabled, setPlcValidationEnabled] = useState<boolean>(false);
   // [] = auto (picks dark/light palette based on theme); length 10 = user custom
   const [plcRainbowColors, setPlcRainbowColors] = useState<string[]>([]);
 
@@ -216,6 +219,8 @@ export function App() {
 
   const plcRainbowEnabledRef = useRef<boolean>(true);
   plcRainbowEnabledRef.current = plcRainbowEnabled;
+  const plcValidationEnabledRef = useRef<boolean>(false);
+  plcValidationEnabledRef.current = plcValidationEnabled;
   const plcRainbowColorsRef = useRef<string[]>(DARK_RAINBOW_COLORS);
   plcRainbowColorsRef.current = effectivePalette;
 
@@ -238,9 +243,12 @@ export function App() {
   const [editorMountVersion, setEditorMountVersion] = useState(0);
 
   const [externalChangedPath, setExternalChangedPath] = useState<string | null>(null);
+  const [unsavedCloseOpen, setUnsavedCloseOpen] = useState<boolean>(false);
+  const allowCloseRef = useRef<boolean>(false);
 
 
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
   const activeSearchRequestRef = useRef<string>("");
   // First hit of the current project search — for auto-navigation when done
   const autoNavHitRef = useRef<SearchHit | null>(null);
@@ -307,6 +315,31 @@ export function App() {
     }
   };
 
+  const hasUnsavedChanges = useMemo(() => tabs.some((t) => t.dirty), [tabs]);
+
+  const saveAllDirtyTabs = async () => {
+    // Use tabsRef (always-current) so we don't race React state updates
+    const currentTabs = tabsRef.current;
+    for (const tab of currentTabs) {
+      if (tab.dirty) {
+        await saveTab(tab, "manual");
+      }
+    }
+  };
+
+  const requestAppClose = () => {
+    if (!hasUnsavedChanges) {
+      void (async () => {
+        if (!isTauriRuntime()) { window.close(); return; }
+        const { appWindow } = await import("@tauri-apps/api/window");
+        allowCloseRef.current = true;
+        await appWindow.close();
+      })();
+      return;
+    }
+    setUnsavedCloseOpen(true);
+  };
+
   // ── Close All ────────────────────────────────────────────────────────────────
   const closeAllTabs = () => {
     setTabs([]);
@@ -332,7 +365,7 @@ export function App() {
         ),
       );
     } catch (e) {
-      setErrorText(String(e));
+      toast.error(String(e));
     }
   };
 
@@ -349,7 +382,7 @@ export function App() {
         ),
       );
     } catch (e) {
-      setErrorText(String(e));
+      toast.error(String(e));
     }
   };
 
@@ -363,9 +396,9 @@ export function App() {
           t.id === activeTab.id ? { ...t, savedContent: t.content, dirty: false, encoding } : t,
         ),
       );
-      setInfoText(`Saved as ${encoding.toUpperCase()}`);
+      toast(`Saved as ${encoding.toUpperCase()}`);
     } catch (e) {
-      setErrorText(String(e));
+      toast.error(String(e));
     }
   };
 
@@ -384,7 +417,7 @@ export function App() {
         ),
       );
     } catch (e) {
-      setErrorText(String(e));
+      toast.error(String(e));
     }
   };
 
@@ -396,7 +429,7 @@ export function App() {
       await deleteFile(activeTab.path);
       closeTab(activeTab.id);
     } catch (e) {
-      setErrorText(String(e));
+      toast.error(String(e));
     }
   };
 
@@ -408,7 +441,7 @@ export function App() {
       await moveToTrash(activeTab.path);
       closeTab(activeTab.id);
     } catch (e) {
-      setErrorText(String(e));
+      toast.error(String(e));
     }
   };
 
@@ -723,6 +756,38 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plcRainbowEnabled, effectivePalette]);
 
+  // Clear or re-run validation markers when toggle changes
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    const model = editorRef.current?.getModel();
+    if (!model || !monaco) return;
+    if (!plcValidationEnabled) {
+      // Clear all markers when disabled
+      monaco.editor.setModelMarkers(model, "plc-validator", []);
+    } else if (model.getLanguageId() === PLC_LANGUAGE_ID) {
+      // Re-run immediately when enabled
+      const errors = validatePlc(model.getValue());
+      monaco.editor.setModelMarkers(model, "plc-validator", errors.map((e) => ({
+        severity: e.severity === "error" ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+        message: e.message,
+        startLineNumber: e.line, startColumn: e.col,
+        endLineNumber: e.line, endColumn: model.getLineMaxColumn(e.line),
+      })));
+    }
+  }, [plcValidationEnabled]);
+
+  // Warn on browser unload if there are unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!tabsRef.current.some((t) => t.dirty)) return;
+      e.preventDefault();
+      // Required for some browsers to show the confirmation dialog
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
   useEffect(() => {
     const previousTabId = prevActiveTabRef.current;
     if (autosaveMode === "focusChange" && previousTabId && previousTabId !== activeTabId) {
@@ -797,7 +862,7 @@ export function App() {
     listen<SearchProgressEvent>("project-search-progress", (event) => {
       const payload = event.payload;
       if (!payload || payload.requestId !== activeSearchRequestRef.current) return;
-      if (payload.error) { setErrorText(payload.error); setProjectSearchBusy(false); return; }
+      if (payload.error) { toast.error(payload.error); setProjectSearchBusy(false); return; }
       if (payload.hits.length) {
         setProjectSearchHits((prev) => [...prev, ...payload.hits]);
         // Navigate to the very first hit as soon as it arrives — no waiting for done
@@ -810,7 +875,7 @@ export function App() {
       setProjectSearchTotalHits(payload.totalHits);
       if (payload.done) {
         setProjectSearchBusy(false);
-        setInfoText(`Search done: ${payload.totalHits} matches, files: ${payload.scannedFiles}`);
+        toast(`Search done: ${payload.totalHits} matches, files: ${payload.scannedFiles}`);
       }
     }).then((unlisten) => {
       if (!active) { unlisten(); return; }
@@ -842,7 +907,7 @@ export function App() {
                   : t,
               ),
             );
-            setInfoText(`File updated: ${affectedTab.name}`);
+            toast(`File updated: ${affectedTab.name}`);
           } catch { /* ignore */ }
         })();
       } else {
@@ -1007,25 +1072,23 @@ export function App() {
 
   const openSingleFile = async () => {
     if (!isTauriRuntime()) {
-      setErrorText("This action is available only in Tauri runtime. Run: npm run tauri -- dev");
+      toast.error("This action is available only in Tauri runtime. Run: npm run tauri -- dev");
       return;
     }
-    setErrorText("");
     try {
       const selected = await open({ directory: false, multiple: false });
       if (!selected || Array.isArray(selected)) return;
       await openFileFromTree(selected);
     } catch (error) {
-      setErrorText(`Operation failed: ${String(error)}`);
+      toast.error(`Operation failed: ${String(error)}`);
     }
   };
 
   const openProjectFolder = async () => {
     if (!isTauriRuntime()) {
-      setErrorText("This action is available only in Tauri runtime. Run: npm run tauri -- dev");
+      toast.error("This action is available only in Tauri runtime. Run: npm run tauri -- dev");
       return;
     }
-    setErrorText("");
     try {
       const selected = await open({ directory: true, multiple: false });
       if (!selected || Array.isArray(selected)) return;
@@ -1035,17 +1098,17 @@ export function App() {
 
       void watchProject(result.rootPath).catch(() => { /* watcher is optional */ });
     } catch (error) {
-      setErrorText(`Operation failed: ${String(error)}`);
+      toast.error(`Operation failed: ${String(error)}`);
     }
   };
 
   const createFolderHandler = async () => {
     if (!projectRoot) {
-      setErrorText("Open a project folder first to create a new folder.");
+      toast.error("Open a project folder first to create a new folder.");
       return;
     }
     if (!isTauriRuntime()) {
-      setErrorText("This action is available only in Tauri runtime. Run: npm run tauri -- dev");
+      toast.error("This action is available only in Tauri runtime. Run: npm run tauri -- dev");
       return;
     }
     // Determine target: selected folder, or project root
@@ -1078,7 +1141,6 @@ export function App() {
     if (!creatingFolderIn) return;
     const trimmed = name.trim();
     if (!trimmed) { setCreatingFolderIn(null); return; }
-    setErrorText("");
     try {
       const uniqueName = getUniqueFolderName(trimmed, creatingFolderIn);
       const newPath = `${creatingFolderIn}/${uniqueName}`;
@@ -1088,7 +1150,7 @@ export function App() {
       const result = await openProject(projectRoot!);
       setTreeNodes(toNodes(result.entries));
     } catch (error) {
-      setErrorText(`Operation failed: ${String(error)}`);
+      toast.error(`Operation failed: ${String(error)}`);
       setCreatingFolderIn(null);
     }
   };
@@ -1099,19 +1161,18 @@ export function App() {
 
   const runKill = async () => {
     if (!isTauriRuntime()) {
-      setErrorText("This action is available only in Tauri runtime.");
+      toast.error("This action is available only in Tauri runtime.");
       return;
     }
-    setErrorText("");
     try {
       const result = await runKillScript();
-      setInfoText(result);
+      toast(result);
     } catch (error) {
       const msg = String(error);
       if (msg.includes("not found") || msg.includes("NOT_FOUND")) {
-        setInfoText("CNC processes are not running — nothing to kill.");
+        toast("CNC processes are not running — nothing to kill.");
       } else {
-        setErrorText(`Kill script failed: ${msg}`);
+        toast.error(`Kill script failed: ${msg}`);
       }
     }
   };
@@ -1129,7 +1190,6 @@ export function App() {
     setTreeNodes((prev) => updateNode(prev, path, (node) => ({ ...node, expanded: willExpand })));
     if (!willExpand || nodeSnapshot.loaded) return;
     setBusyPath(path);
-    setErrorText("");
     try {
       const result = await listDir(path);
       setTreeNodes((prev) =>
@@ -1138,7 +1198,7 @@ export function App() {
         })),
       );
     } catch (error) {
-      setErrorText(`Operation failed: ${String(error)}`);
+      toast.error(`Operation failed: ${String(error)}`);
     } finally {
       setBusyPath("");
     }
@@ -1167,14 +1227,13 @@ export function App() {
     switchVisible = true,
   ) => {
     setSelectedTreePath(path);
-    setErrorText("");
     try {
       const result = await openFile(path);
       activateOrAddTab(result.path, result.content, switchVisible);
       if (cursor) setPendingCursor(cursor);
       pushRecentFile(path);
     } catch (error) {
-      setErrorText(`Operation failed: ${String(error)}`);
+      toast.error(`Operation failed: ${String(error)}`);
     }
   };
 
@@ -1205,11 +1264,10 @@ export function App() {
 
   const saveTab = async (tab: EditorTab, mode: "manual" | "auto") => {
     if (!tab.dirty && !tab.path.startsWith("untitled://")) return;
-    setErrorText("");
     try {
       let targetPath = tab.path;
       if (tab.path.startsWith("untitled://")) {
-        if (!isTauriRuntime()) { setErrorText("Save As requires Tauri runtime."); return; }
+        if (!isTauriRuntime()) { toast.error("Save As requires Tauri runtime."); return; }
         const selected = await save({ defaultPath: "untitled.txt" });
         if (!selected) return;
         targetPath = selected;
@@ -1222,9 +1280,9 @@ export function App() {
       setTabs((prev) => prev.map((item) =>
         item.id !== tab.id ? item : { ...item, savedContent: item.content, dirty: false },
       ));
-      if (mode === "manual") setInfoText(`Saved: ${targetPath}`);
+      if (mode === "manual") toast(`Saved: ${targetPath}`);
     } catch (error) {
-      setErrorText(`Operation failed: ${String(error)}`);
+      toast.error(`Operation failed: ${String(error)}`);
     }
   };
 
@@ -1310,7 +1368,7 @@ export function App() {
     const matches = model.findMatches(findQuery, true, false, false, null, false);
     if (!matches.length) return;
     editor.executeEdits("mtcode-replace-all", matches.map((m) => ({ range: m.range, text: replaceText })));
-    setInfoText(`Replaced: ${matches.length}`);
+    toast(`Replaced: ${matches.length}`);
     runFind(findQuery);
   };
 
@@ -1379,10 +1437,10 @@ export function App() {
   };
 
   const runProjectSearch = async (opts: ProjectSearchOptions, queryOverride?: string) => {
-    if (!projectRoot) { setErrorText("Open a project folder first."); return; }
+    if (!projectRoot) { toast.error("Open a project folder first."); return; }
     const query = (queryOverride !== undefined ? queryOverride : projectSearchQuery).trim();
-    if (!query) { setErrorText("Search query is empty."); return; }
-    setErrorText(""); setProjectSearchBusy(true);
+    if (!query) { toast.error("Search query is empty."); return; }
+    setProjectSearchBusy(true);
     setProjectSearchHits([]); setProjectSearchScannedFiles(0); setProjectSearchTotalHits(0);
     autoNavHitRef.current = null;
     try {
@@ -1400,7 +1458,7 @@ export function App() {
       activeSearchRequestRef.current = requestId;
     } catch (error) {
       setProjectSearchBusy(false);
-      setErrorText(`Operation failed: ${String(error)}`);
+      toast.error(`Operation failed: ${String(error)}`);
     }
   };
 
@@ -1435,6 +1493,7 @@ export function App() {
     monaco.editor.defineTheme("mtcode-monokai-dark",   MONACO_THEME_MONOKAI_DARK);
     monaco.editor.defineTheme("mtcode-monokai-light",  MONACO_THEME_MONOKAI_LIGHT);
     registerPlcLanguage(monaco);
+    registerPlcFormatter(monaco, plcValidationEnabledRef);
   };
 
   // ── Rainbow decoration updater — called on mount and every content change ──
@@ -1458,6 +1517,7 @@ export function App() {
 
   const onEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
     setEditorMountVersion((v) => v + 1);
 
     // Remove Monaco's default F1 / Ctrl+Shift+P keybindings for quickCommand,
@@ -1475,6 +1535,37 @@ export function App() {
       monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP,
       () => { editorActionsRef.current.openCommandPalette(); },
     );
+
+    // ── F7: format document (all languages) + PLC validation toast ────────
+    editor.addCommand(monaco.KeyCode.F7, () => {
+      const model = editor.getModel();
+      if (!model) return;
+
+      // For PLC files: validate first, show errors as toasts with navigation
+      // (only when validation is enabled)
+      if (model.getLanguageId() === PLC_LANGUAGE_ID && plcValidationEnabledRef.current) {
+        const errors = validatePlc(model.getValue());
+        if (errors.length > 0) {
+          const first = errors[0];
+          // Navigate to first error
+          editor.revealLineInCenter(first.line);
+          editor.setPosition({ lineNumber: first.line, column: first.col });
+          editor.focus();
+          // Show all errors as toasts
+          for (const err of errors) {
+            toast.error(`Ln ${err.line}: ${err.message}`, { duration: 6000 });
+          }
+          return;
+        }
+      }
+
+      // Format document
+      void editor.getAction("editor.action.formatDocument")?.run().then(() => {
+        if (editor.getModel()?.getLanguageId() === PLC_LANGUAGE_ID) {
+          toast("Formatted", { duration: 2000 });
+        }
+      });
+    });
 
     // ── Disable Monaco's built-in find widget ──
     editor.updateOptions({
@@ -1502,6 +1593,22 @@ export function App() {
     // Initial rainbow pass
     updateRainbowDecorations(editor);
 
+    // Attach PLC validator to the initial model (onDidCreateModel fires only for new models)
+    const initialModel = editor.getModel();
+    if (initialModel && initialModel.getLanguageId() === PLC_LANGUAGE_ID && plcValidationEnabledRef.current) {
+      const initErrors = validatePlc(initialModel.getValue());
+      monaco.editor.setModelMarkers(
+        initialModel,
+        "plc-validator",
+        initErrors.map((e) => ({
+          severity: e.severity === "error" ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+          message: e.message,
+          startLineNumber: e.line, startColumn: e.col,
+          endLineNumber: e.line, endColumn: initialModel.getLineMaxColumn(e.line),
+        })),
+      );
+    }
+
     // Re-run on content change (debounced 200 ms)
     let rainbowTimer: ReturnType<typeof setTimeout> | null = null;
     editor.onDidChangeModelContent(() => {
@@ -1517,6 +1624,11 @@ export function App() {
       bookmarkDecorRef.current = null;
       updateRainbowDecorations(editor);
       updateBookmarkDecorations();
+      // If validation is currently disabled, ensure markers are cleared on the new model
+      const model = editor.getModel();
+      if (model && !plcValidationEnabledRef.current) {
+        monaco.editor.setModelMarkers(model, "plc-validator", []);
+      }
     });
 
     // Intercept keys inside Monaco before its own handlers
@@ -1628,6 +1740,7 @@ export function App() {
       case "toggleFold":      editorCommand("editor.toggleFold"); break;
       case "wordWrap":        setWordWrap((w) => (w === "off" ? "on" : "off")); break;
       case "killScript":      defer(() => setKillDialogOpen(true)); break;
+      case "beautify":        defer(() => editorRef.current?.getAction("editor.action.formatDocument")?.run()); break;
     }
   };
 
@@ -1646,9 +1759,9 @@ export function App() {
             : t,
         ),
       );
-      setInfoText(`File reloaded: ${tab.name}`);
+      toast(`File reloaded: ${tab.name}`);
     } catch {
-      setErrorText(`Failed to reload file: ${path}`);
+      toast.error(`Failed to reload file: ${path}`);
     }
     setExternalChangedPath(null);
   };
@@ -1692,7 +1805,7 @@ export function App() {
       { label: "Close",             shortcut: "Ctrl+W",   onSelect: () => activeTab && closeTab(activeTab.id), disabled: !activeTab, separatorBefore: true },
       { label: "Close All",         shortcut: "Ctrl+Shift+W", onSelect: closeAllTabs },
       { label: "Close All But This",                      onSelect: closeAllButActive,              disabled: tabs.length <= 1 },
-      { label: "Exit",              separatorBefore: true, onSelect: () => { void (async () => { const { appWindow } = await import("@tauri-apps/api/window"); appWindow.close(); })(); } },
+      { label: "Exit",              separatorBefore: true, onSelect: requestAppClose },
     ],
 
     // ── EDIT ──────────────────────────────────────────────────────────────────
@@ -1769,7 +1882,7 @@ export function App() {
 
     // ── HELP ──────────────────────────────────────────────────────────────────
     help: [
-      { label: "Help", onSelect: () => setInfoText("Ctrl+O Open  Ctrl+S Save  Ctrl+F Find  Ctrl+G GoTo  F2 Bookmark  Alt+↓/↑ Find Next/Prev  Ctrl+Shift+F Project Search") },
+      { label: "Help", onSelect: () => toast("Ctrl+O Open  Ctrl+S Save  Ctrl+F Find  Ctrl+G GoTo  F2 Bookmark  Alt+↓/↑ Find Next/Prev  Ctrl+Shift+F Project Search") },
       { label: "About MTCode...", separatorBefore: true, onSelect: () => setAboutOpen(true) },
     ],
   }),
@@ -1832,8 +1945,6 @@ export function App() {
             headerName={projectRoot ? fileName(projectRoot) : "No project"}
             treeNodes={treeNodes}
             busyPath={busyPath}
-            errorText={errorText}
-            infoText={infoText}
             sidebarWidth={sidebarWidth}
             onNewFile={() => openNewUntitledTab()}
             onCreateFolder={() => void createFolderHandler()}
@@ -1962,8 +2073,10 @@ export function App() {
         autosaveMode={autosaveMode}
         autosaveDelayMs={autosaveDelayMs}
         cursorText={cursorText}
+        plcValidationEnabled={plcValidationEnabled}
         onAutosaveModeChange={setAutosaveMode}
         onDelayChange={setAutosaveDelayMs}
+        onTogglePlcValidation={() => setPlcValidationEnabled((v) => !v)}
       />
 
       <ExternalChangeDialog
@@ -1977,6 +2090,33 @@ export function App() {
         }
         onReload={() => void handleReloadExternal()}
         onKeep={handleKeepExternal}
+      />
+
+      <UnsavedChangesDialog
+        open={unsavedCloseOpen}
+        dirtyTabs={tabs.filter((t) => t.dirty)}
+        onSaveAndExit={async () => {
+          try {
+            await saveAllDirtyTabs();
+            setUnsavedCloseOpen(false);
+            // Re-check after save (user may cancel Save As)
+            if (tabsRef.current.some((t) => t.dirty)) return;
+            if (!isTauriRuntime()) { window.close(); return; }
+            const { appWindow } = await import("@tauri-apps/api/window");
+            allowCloseRef.current = true;
+            await appWindow.close();
+          } catch (e) {
+            toast.error(String(e));
+          }
+        }}
+        onDiscardAndExit={async () => {
+          setUnsavedCloseOpen(false);
+          if (!isTauriRuntime()) { window.close(); return; }
+          const { appWindow } = await import("@tauri-apps/api/window");
+          allowCloseRef.current = true;
+          await appWindow.close();
+        }}
+        onCancel={() => setUnsavedCloseOpen(false)}
       />
 
       <SettingsModal
@@ -2026,6 +2166,8 @@ export function App() {
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
       />
+
+      <Toaster />
     </div>
   );
 }

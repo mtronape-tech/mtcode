@@ -32,3 +32,7 @@ npm-debug.log*
 
 # Docs
 docs
+
+# Redactors
+.vscode
+.qwen

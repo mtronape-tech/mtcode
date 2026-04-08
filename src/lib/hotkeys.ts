@@ -7,7 +7,7 @@ export type HotkeyAction =
   | "findInFile" | "replaceInFile" | "findInProject" | "findNext" | "findPrev"
   | "goTo" | "toggleBookmark" | "nextBookmark" | "prevBookmark"
   | "settings" | "nextTab" | "prevTab" | "toggleFold" | "wordWrap"
-  | "commandPalette" | "killScript";
+  | "commandPalette" | "killScript" | "beautify";
 
 export const HOTKEY_LABELS: Record<HotkeyAction, string> = {
   openFile:        "Open file",
@@ -32,11 +32,13 @@ export const HOTKEY_LABELS: Record<HotkeyAction, string> = {
   wordWrap:        "Toggle word wrap",
   commandPalette:  "Command palette",
   killScript:      "Kill CNC processes",
+  beautify:        "Format / Beautify",
 };
 
 /** Short labels for the F-key bar (max ~5 chars). */
 export const FKEY_SHORT_LABELS: Partial<Record<HotkeyAction, string>> = {
   commandPalette: "Cmd",
+  beautify:       "Fmt",
   save:           "Save",
   saveAs:         "SvAs",
   saveAll:        "SvAll",
@@ -68,7 +70,7 @@ export const FKEY_DEFAULT_ACTIONS: (HotkeyAction | null)[] = [
   "replaceInFile",  // F4
   "findInProject",  // F5
   "goTo",           // F6
-  "toggleFold",     // F7
+  "beautify",       // F7
   "closeTab",       // F8
   "killScript",     // F9
   "settings",       // F10
@@ -97,6 +99,7 @@ export const HOTKEY_DEFAULTS: Record<HotkeyAction, string> = {
   wordWrap:        "Alt+Z",
   commandPalette:  "F1",
   killScript:      "F9",
+  beautify:        "F7",
 };
 
 /** Merge stored hotkeys with defaults (stored values win). */

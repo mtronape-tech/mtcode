@@ -62,8 +62,15 @@ export function registerPlcLanguage(monaco: typeof Monaco): void {
         // ── Channel prefix: &1, &2 … (used in .cfg files) ──────────────────
         [/&\d+/, "constant"],
 
-        // ── Preprocessor directives: #define, #ifdef, #ifndef, #include … ──
-        [/#\w+/, "keyword"],
+        // ── Preprocessor directives ────────────────────────────────────────
+        // Opening: #ifdef, #ifndef → preprocessor.open (foldable start)
+        [/^[ \t]*#ifn?def\b/, "keyword.preprocessor.open"],
+        // Closing: #endif → preprocessor.close (foldable end)
+        [/^[ \t]*#endif\b/, "keyword.preprocessor.close"],
+        // Branch: #else, #elif → preprocessor.branch
+        [/^[ \t]*#else\b/, "keyword.preprocessor.branch"],
+        // Other: #define, #include, #undef, etc.
+        [/#\w+/, "keyword.preprocessor"],
 
         // ── Line comments: ; or // ─────────────────────────────────────────
         [/;.*$/, "comment"],
@@ -144,8 +151,8 @@ export function registerPlcLanguage(monaco: typeof Monaco): void {
     ],
     folding: {
       markers: {
-        start: new RegExp("^\\s*(IF|WHILE|OPEN)\\b", "i"),
-        end: new RegExp("^\\s*(ENDIF|ENDWHILE|CLOSE)\\b", "i"),
+        start: new RegExp("^\\s*(IF|WHILE|OPEN|#ifdef|#ifndef)\\b", "i"),
+        end:   new RegExp("^\\s*(ENDIF|ENDWHILE|CLOSE|#endif)\\b", "i"),
       },
     },
     indentationRules: {
