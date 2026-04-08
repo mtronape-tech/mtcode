@@ -12,6 +12,7 @@ artifacts/
 
 # WebView2 fixed runtime (large binary files, not for git)
 src-tauri/webview2-fixed-runtime/
+webview2-fixed-runtime/
 
 # Project docs (reference materials, binaries)
 docs/
