@@ -16,11 +16,11 @@
       "secondary-foreground": "0 0% 100%",
       "muted": "0 0% 58%",
       "muted-foreground": "0 0% 95%",
-      "accent": "180 100% 67%",
+      "accent": "59 100% 66%",
       "accent-foreground": "240 100% 12%",
       "destructive": "0 70% 45%",
       "destructive-foreground": "0 0% 100%",
-      "ring": "180 100% 67%",
+      "ring": "59 100% 66%",
       "radius": "0px"
     },
     "monaco": {
