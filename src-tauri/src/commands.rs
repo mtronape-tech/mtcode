@@ -808,3 +808,43 @@ fn settings_file_path() -> Result<PathBuf, String> {
 
   Ok(base.join("MTCode").join("settings.json"))
 }
+
+// ── XLSX Spreadsheet Support ────────────────────────────────────────────────
+
+use calamine::{open_workbook_auto, Reader};
+
+/// Metadata for a single sheet
+#[derive(Serialize, Clone, Debug)]
+pub struct XlsxSheetInfo {
+  pub name: String,
+  pub row_count: u32,
+  pub col_count: u32,
+}
+
+/// Result of parsing spreadsheet structure
+#[derive(Serialize, Debug)]
+pub struct XlsxWorkbookInfo {
+  pub sheets: Vec<XlsxSheetInfo>,
+}
+
+/// Read workbook structure without loading cell data
+#[tauri::command]
+pub fn get_xlsx_info(path: String) -> Result<XlsxWorkbookInfo, String> {
+  let mut workbook = open_workbook_auto(&path)
+    .map_err(|e| format!("Failed to open workbook: {}", e))?;
+
+  let mut sheets = Vec::new();
+  for name in workbook.sheet_names() {
+    // We only need dimensions here, not data
+    if let Ok(range) = workbook.worksheet_range(&name) {
+      let (rows, cols) = range.get_size();
+      sheets.push(XlsxSheetInfo {
+        name: name.clone(),
+        row_count: rows as u32,
+        col_count: cols as u32,
+      });
+    }
+  }
+
+  Ok(XlsxWorkbookInfo { sheets })
+}

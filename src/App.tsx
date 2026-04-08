@@ -21,6 +21,7 @@ import {
   runKillScript,
   readFileEncoding,
   saveFileEncoding,
+  getXlsxInfo,
   type AppSettings,
   type AutosaveMode,
   type FileChangedEvent,
@@ -28,10 +29,11 @@ import {
   type ProjectSearchOptions,
   type SearchHit,
   type SearchProgressEvent,
+  type XlsxWorkbookInfo,
   DEFAULT_SEARCH_OPTIONS,
 } from "./services/ipc";
 
-import type { BookmarkMap, EditorTab, MenuAction, MenuKey, TreeNode } from "./types";
+import type { BookmarkMap, EditorTab, EditorTabMode, MenuAction, MenuKey, TreeNode } from "./types";
 
 import { EditorTabs } from "./components/EditorTabs";
 import { ExternalChangeDialog } from "./components/ExternalChangeDialog";
@@ -1246,7 +1248,7 @@ export function App() {
     }
   };
 
-  const activateOrAddTab = (path: string, content: string, switchVisible = true) => {
+  const activateOrAddTab = (path: string, content: string, switchVisible = true, mode: EditorTabMode = "text", xlsxInfo?: XlsxWorkbookInfo) => {
     // Use tabsRef (always current) to avoid calling setState inside a setState updater
     const existing = tabsRef.current.find((tab) => tab.path === path);
     if (existing) {
@@ -1263,7 +1265,7 @@ export function App() {
     } else {
       const newTab: EditorTab = {
         id: `${Date.now()}-${path}`, path, name: fileName(path),
-        content, savedContent: content, dirty: false,
+        content, savedContent: content, dirty: false, mode, xlsxInfo,
       };
       setTabs((prev) => [...prev, newTab]);
       setActiveTabId(newTab.id);
@@ -1281,6 +1283,11 @@ export function App() {
     }
   };
 
+  const isSpreadsheet = (path: string) => {
+    const ext = path.split(".").pop()?.toLowerCase();
+    return ext === "xlsx" || ext === "xls";
+  };
+
   const openFileFromTree = async (
     path: string,
     cursor?: { line: number; column: number; matchLength?: number },
@@ -1288,8 +1295,13 @@ export function App() {
   ) => {
     setSelectedTreePath(path);
     try {
-      const result = await openFile(path);
-      activateOrAddTab(result.path, result.content, switchVisible);
+      if (isSpreadsheet(path)) {
+        const info = await getXlsxInfo(path);
+        activateOrAddTab(path, "", switchVisible, "spreadsheet", info);
+      } else {
+        const result = await openFile(path);
+        activateOrAddTab(result.path, result.content, switchVisible, "text");
+      }
       if (cursor) setPendingCursor(cursor);
       pushRecentFile(path);
     } catch (error) {
@@ -1316,6 +1328,7 @@ export function App() {
       content: "",
       savedContent: "",
       dirty: false,
+      mode: "text",
     };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(id);
