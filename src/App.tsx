@@ -461,13 +461,15 @@ export function App() {
   // ── Bookmarks ─────────────────────────────────────────────────────────────────
   const updateBookmarkDecorations = () => {
     const ed = editorRef.current;
-    if (!ed || !ed.getModel()) return;
+    const model = ed?.getModel();
+    if (!ed || !model || model.isDisposed()) return;
     if (!bookmarkDecorRef.current) {
       bookmarkDecorRef.current = ed.createDecorationsCollection([]);
     }
     const path = activeTab?.path ?? "";
     const lines = bookmarks.get(path) ?? new Set<number>();
-    const decors = Array.from(lines).map((ln) => ({
+    const lineCount = model.getLineCount();
+    const decors = Array.from(lines).filter((ln) => ln >= 1 && ln <= lineCount).map((ln) => ({
       range: { startLineNumber: ln, startColumn: 1, endLineNumber: ln, endColumn: 1 },
       options: {
         isWholeLine: false,
@@ -544,8 +546,12 @@ export function App() {
   const handleGoTo = (line: number, col: number) => {
     const ed = editorRef.current;
     if (!ed) return;
-    ed.revealLineInCenter(line);
-    ed.setPosition({ lineNumber: line, column: col });
+    const model = ed.getModel();
+    if (!model) return;
+    const safeLine = Math.min(Math.max(line, 1), model.getLineCount());
+    const safeCol = Math.min(Math.max(col, 1), model.getLineMaxColumn(safeLine));
+    ed.revealLineInCenter(safeLine);
+    ed.setPosition({ lineNumber: safeLine, column: safeCol });
     ed.focus();
   };
 
@@ -772,10 +778,11 @@ export function App() {
   }, [plcRainbowEnabled, effectivePalette]);
 
   // Clear or re-run validation markers when toggle changes
+  // Clear or re-run validation markers when toggle changes
   useEffect(() => {
     const monaco = monacoRef.current;
     const model = editorRef.current?.getModel();
-    if (!model || !monaco) return;
+    if (!model || !monaco || model.isDisposed()) return;
     if (!plcValidationEnabled) {
       // Clear all markers when disabled
       monaco.editor.setModelMarkers(model, "plc-validator", []);
@@ -1596,7 +1603,7 @@ export function App() {
   // ── Rainbow decoration updater — called on mount and every content change ──
   const updateRainbowDecorations = (editor: import("monaco-editor").editor.IStandaloneCodeEditor) => {
     const model = editor.getModel();
-    if (!model) return;
+    if (!model || model.isDisposed()) return;
     if (!rainbowDecorRef.current) {
       rainbowDecorRef.current = editor.createDecorationsCollection([]);
     }
@@ -1636,7 +1643,7 @@ export function App() {
     // ── F7: format document (all languages) + PLC validation toast ────────
     editor.addCommand(monaco.KeyCode.F7, () => {
       const model = editor.getModel();
-      if (!model) return;
+      if (!model || model.isDisposed()) return;
 
       // For PLC files: validate first, show errors as toasts with navigation
       // (only when validation is enabled)
@@ -1644,9 +1651,10 @@ export function App() {
         const errors = validatePlc(model.getValue());
         if (errors.length > 0) {
           const first = errors[0];
-          // Navigate to first error
-          editor.revealLineInCenter(first.line);
-          editor.setPosition({ lineNumber: first.line, column: first.col });
+          // Navigate to first error (bounds check)
+          const safeLine = Math.min(first.line, model.getLineCount());
+          editor.revealLineInCenter(safeLine);
+          editor.setPosition({ lineNumber: safeLine, column: first.col });
           editor.focus();
           // Show all errors as toasts
           for (const err of errors) {
@@ -1658,7 +1666,8 @@ export function App() {
 
       // Format document
       void editor.getAction("editor.action.formatDocument")?.run().then(() => {
-        if (editor.getModel()?.getLanguageId() === PLC_LANGUAGE_ID) {
+        const currentModel = editor.getModel();
+        if (currentModel?.getLanguageId() === PLC_LANGUAGE_ID) {
           toast("Formatted", { duration: 2000 });
         }
       });
@@ -1710,7 +1719,11 @@ export function App() {
     let rainbowTimer: ReturnType<typeof setTimeout> | null = null;
     editor.onDidChangeModelContent(() => {
       if (rainbowTimer) clearTimeout(rainbowTimer);
-      rainbowTimer = setTimeout(() => updateRainbowDecorations(editor), 200);
+      rainbowTimer = setTimeout(() => {
+        const model = editor.getModel();
+        if (!model || model.isDisposed()) return;
+        updateRainbowDecorations(editor);
+      }, 200);
     });
 
     // Re-run when the model is swapped (tab switch)
@@ -1719,14 +1732,18 @@ export function App() {
       // the old model's view layer is being torn down and DOM is unstable.
       rainbowDecorRef.current = null;
       bookmarkDecorRef.current = null;
-      // Defer decoration updates until Monaco finishes the model transition.
+      // Defer rainbow update until Monaco finishes the model transition.
+      // Bookmark decorations are NOT updated here — the React effect [bookmarks, activeTabId]
+      // handles that with a fresh (non-stale) closure. Calling updateBookmarkDecorations()
+      // here would use a stale activeTab and apply wrong-file bookmarks to the new model.
       setTimeout(() => {
+        const model = editor.getModel();
+        if (!model || model.isDisposed()) return;
         updateRainbowDecorations(editor);
-        updateBookmarkDecorations();
       }, 0);
       // If validation is currently disabled, ensure markers are cleared on the new model
       const model = editor.getModel();
-      if (model && !plcValidationEnabledRef.current) {
+      if (model && !model.isDisposed() && !plcValidationEnabledRef.current) {
         monaco.editor.setModelMarkers(model, "plc-validator", []);
       }
     });
