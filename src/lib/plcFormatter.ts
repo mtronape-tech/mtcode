@@ -431,12 +431,19 @@ export function registerPlcFormatter(
   tabSizeRef: { current: number } = { current: 4 },
 ): void {
 
+  // Shared flag: set while formatter is applying edits so the validator
+  // skips the content-change event that formatter triggers.
+  let formattingInProgress = false;
+
   // ── Formatter ──────────────────────────────────────────────────────────────
   monaco.languages.registerDocumentFormattingEditProvider(PLC_LANGUAGE_ID, {
     provideDocumentFormattingEdits(model) {
       const source = model.getValue();
       const formatted = formatPlc(source, tabSizeRef.current);
       if (formatted === source) return [];
+      formattingInProgress = true;
+      // Monaco applies edits asynchronously; clear the flag shortly after.
+      setTimeout(() => { formattingInProgress = false; }, 100);
       return [{ range: model.getFullModelRange(), text: formatted }];
     },
   });
@@ -517,24 +524,35 @@ export function registerPlcFormatter(
         });
       }
 
+      // Per-marker fixes for unclosed blocks: compute smart insertion point
+      // based on indent of the opening keyword, not end-of-file.
+      const lines = model.getValue().split(/\r?\n/);
       for (const marker of context.markers) {
         if (typeof marker.message !== "string") continue;
-        if (marker.message.includes("Unclosed IF block")) {
-          actions.push({
-            title: "Добавить ENDIF (в конец файла)",
-            kind: "quickfix", diagnostics: [marker],
-            edit: { edits: [{ resource: model.uri, versionId: model.getVersionId(), textEdit: { range: endRange, text: insertAtEof("ENDIF") } }] },
-            isPreferred: true,
-          });
-        }
-        if (marker.message.includes("Unclosed WHILE block")) {
-          actions.push({
-            title: "Добавить ENDWHILE (в конец файла)",
-            kind: "quickfix", diagnostics: [marker],
-            edit: { edits: [{ resource: model.uri, versionId: model.getVersionId(), textEdit: { range: endRange, text: insertAtEof("ENDWHILE") } }] },
-            isPreferred: true,
-          });
-        }
+
+        const isUnclosedIf    = marker.message.includes("Unclosed IF block");
+        const isUnclosedWhile = marker.message.includes("Unclosed WHILE block");
+        if (!isUnclosedIf && !isUnclosedWhile) continue;
+
+        const keyword = isUnclosedIf ? "ENDIF" : "ENDWHILE";
+        const openLine = marker.startLineNumber; // line where IF/WHILE was opened
+
+        // Find first line after the opener that returns to the same or lower indent.
+        // That's where the closing keyword should be inserted.
+        const insertLine = findInsertBefore(lines, openLine, model.getLineCount() + 1);
+        const atEof = insertLine > model.getLineCount();
+
+        const insertRange: Monaco.IRange = atEof
+          ? endRange
+          : { startLineNumber: insertLine, startColumn: 1, endLineNumber: insertLine, endColumn: 1 };
+        const text = atEof ? insertAtEof(keyword) : `${keyword}\n`;
+
+        actions.push({
+          title: `Вставить ${keyword} (в корректное место)`,
+          kind: "quickfix", diagnostics: [marker],
+          edit: { edits: [{ resource: model.uri, versionId: model.getVersionId(), textEdit: { range: insertRange, text } }] },
+          isPreferred: true,
+        });
       }
 
       return { actions, dispose: () => {} };
@@ -544,7 +562,7 @@ export function registerPlcFormatter(
   // ── Validator (attaches to every new PLC model) ────────────────────────────
   monaco.editor.onDidCreateModel((model) => {
     if (model.getLanguageId() !== PLC_LANGUAGE_ID) return;
-    attachValidator(monaco, model, validationEnabledRef);
+    attachValidator(monaco, model, validationEnabledRef, () => formattingInProgress);
   });
 }
 
@@ -552,6 +570,7 @@ function attachValidator(
   monaco: typeof Monaco,
   model: Monaco.editor.ITextModel,
   validationEnabledRef: { current: boolean },
+  isFormatting: () => boolean = () => false,
 ): void {
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -581,6 +600,8 @@ function attachValidator(
 
   model.onDidChangeContent(() => {
     if (model.isDisposed()) return;
+    // Skip re-validation when the change came from the formatter (indentation only).
+    if (isFormatting()) return;
     if (!validationEnabledRef.current) {
       if (timer) clearTimeout(timer);
       timer = null;
