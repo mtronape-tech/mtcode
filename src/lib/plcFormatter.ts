@@ -334,6 +334,23 @@ export function validatePlc(source: string): PlcError[] {
 
       case "ENDI":   // abbreviation for ENDIF
       case "ENDIF": {
+        const curIndent = leadingWs(raw);
+        // Pop inner IF/WHILE blocks that were never closed (indent deeper than this ENDIF).
+        // This fires when an ENDIF is "stolen" by an inner unclosed block.
+        while (stack.length > 0) {
+          const top = stack[stack.length - 1];
+          if (top.keyword === "OPEN") break; // don't cross program boundaries
+          const topIndent = leadingWs(lines[top.line - 1] ?? "");
+          if (topIndent <= curIndent) break; // indent matches — this is the right block
+          // Inner block was not closed — report error here (where the mismatch is visible)
+          const closer = top.keyword === "IF" ? "ENDIF" : "ENDWHILE";
+          errors.push({
+            line: lineNum, col: 1,
+            message: `Missing ${closer} for ${top.keyword} opened at line ${top.line}`,
+            severity: "error",
+          });
+          stack.pop();
+        }
         const top = stack[stack.length - 1];
         if (!top) {
           errors.push({ line: lineNum, col: 1, message: "ENDIF without matching IF", severity: "error" });
@@ -367,6 +384,21 @@ export function validatePlc(source: string): PlcError[] {
       }
 
       case "ENDWHILE": {
+        const curIndent = leadingWs(raw);
+        // Pop inner blocks that were never closed (indent deeper than this ENDWHILE).
+        while (stack.length > 0) {
+          const top = stack[stack.length - 1];
+          if (top.keyword === "OPEN") break;
+          const topIndent = leadingWs(lines[top.line - 1] ?? "");
+          if (topIndent <= curIndent) break;
+          const closer = top.keyword === "IF" ? "ENDIF" : "ENDWHILE";
+          errors.push({
+            line: lineNum, col: 1,
+            message: `Missing ${closer} for ${top.keyword} opened at line ${top.line}`,
+            severity: "error",
+          });
+          stack.pop();
+        }
         const top = stack[stack.length - 1];
         if (!top) {
           errors.push({ line: lineNum, col: 1, message: "ENDWHILE without matching WHILE", severity: "error" });
@@ -413,9 +445,13 @@ export function validatePlc(source: string): PlcError[] {
   // OPEN without CLOSE is valid in this language (intentional open-ended blocks).
   for (const entry of stack) {
     if (entry.keyword === "OPEN") continue;
+    const closer = entry.keyword === "IF" ? "ENDIF" : "ENDWHILE";
+    // Report at the expected insertion point (indent-based), not at the opening line.
+    const insertAt = findInsertBefore(lines, entry.line, lines.length + 1);
+    const errorLine = Math.min(insertAt, lines.length);
     errors.push({
-      line: entry.line, col: 1,
-      message: `Unclosed ${entry.keyword} block`,
+      line: errorLine, col: 1,
+      message: `Missing ${closer} for ${entry.keyword} opened at line ${entry.line}`,
       severity: "error",
     });
   }
