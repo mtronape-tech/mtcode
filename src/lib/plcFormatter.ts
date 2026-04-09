@@ -155,22 +155,6 @@ function isWhileWaitInline(raw: string): boolean {
   return /^WAIT\b/i.test(tail);
 }
 
-/**
- * Returns true for the multi-line blocking-wait form:
- *   WHILE (condition)
- *     WAIT              ← next meaningful line
- * This form does NOT open a loop — no ENDWHILE expected.
- */
-function isWhileWaitNextLine(lines: string[], afterIndex: number): boolean {
-  for (let i = afterIndex; i < lines.length; i++) {
-    const t = lines[i].trim();
-    if (t === "") continue;
-    if (/^\s*#/.test(t)) continue;
-    if (t.startsWith(";") || t.startsWith("//") || t.startsWith("/*") || t.startsWith("*")) continue;
-    return getFirstToken(lines[i]) === "WAIT";
-  }
-  return false;
-}
 
 /**
  * Validate the OPEN statement type.
@@ -374,10 +358,9 @@ export function validatePlc(source: string): PlcError[] {
 
       case "WHILE": {
         validateCondition(raw, "WHILE", lineNum, errors);
-        // Blocking-wait form: WHILE (cond) WAIT  — inline or on next line
-        // Either way no ENDWHILE is expected.
-        const isWait = isWhileWaitInline(raw) || isWhileWaitNextLine(lines, i + 1);
-        if (!isWait) {
+        // Blocking-wait form: WHILE (cond) WAIT on the same line — no ENDWHILE expected.
+        // Standard loop form: WHILE (cond) … ENDWHILE — push to stack.
+        if (!isWhileWaitInline(raw)) {
           stack.push({ keyword: "WHILE", line: lineNum });
         }
         break;
