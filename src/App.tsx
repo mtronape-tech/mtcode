@@ -21,6 +21,7 @@ import {
   runKillScript,
   readFileEncoding,
   saveFileEncoding,
+  getXlsxInfo,
   type AppSettings,
   type AutosaveMode,
   type FileChangedEvent,
@@ -31,7 +32,7 @@ import {
   DEFAULT_SEARCH_OPTIONS,
 } from "./services/ipc";
 
-import type { BookmarkMap, EditorTab, MenuAction, MenuKey, TreeNode } from "./types";
+import type { BookmarkMap, EditorTab, EditorTabMode, MenuAction, MenuKey, TreeNode } from "./types";
 
 import { EditorTabs } from "./components/EditorTabs";
 import { ExternalChangeDialog } from "./components/ExternalChangeDialog";
@@ -47,6 +48,8 @@ import { KillDialog } from "./components/KillDialog";
 import { CommandPalette, type CommandPaletteItem } from "./components/CommandPalette";
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { Toaster, toast } from "./components/Toaster";
+import { AIAssistant } from "./components/AIAssistant";
+import SpreadsheetView from "./components/SpreadsheetView";
 import { useTheme } from "./context/ThemeContext";
 import { isValidThemeId, THEMES } from "./lib/theme";
 import { HELP_CONTENT } from "./lib/helpContent";
@@ -199,6 +202,10 @@ export function App() {
   const [plcValidationEnabled, setPlcValidationEnabled] = useState<boolean>(false);
   // [] = auto (picks dark/light palette based on theme); length 10 = user custom
   const [plcRainbowColors, setPlcRainbowColors] = useState<string[]>([]);
+
+  // AI Assistant state
+  const [aiAssistantVisible, setAiAssistantVisible] = useState<boolean>(false);
+  const [aiCharacterId, setAiCharacterId] = useState<"clippy">("clippy");
 
   // Always-current ref — avoids stale closure in the keydown useEffect (deps=[])
   const hotkeysRef = useRef(hotkeys);
@@ -680,6 +687,8 @@ export function App() {
     if (Array.isArray(draft.fkeyActions) && draft.fkeyActions.length === 10) {
       setFkeyActions(draft.fkeyActions);
     }
+    setAiAssistantVisible(draft.aiAssistantVisible);
+    setAiCharacterId(draft.aiCharacterId);
   };
 
   // Keep action refs current every render (safe pattern for stable callbacks)
@@ -755,6 +764,8 @@ export function App() {
         if (Array.isArray(settings.fkeyActions) && settings.fkeyActions.length === 10) {
           setFkeyActions(settings.fkeyActions);
         }
+        if (settings.aiAssistantVisible !== undefined) setAiAssistantVisible(settings.aiAssistantVisible);
+        if (settings.aiCharacterId) setAiCharacterId(settings.aiCharacterId as "clippy");
       } catch {
         setAutosaveMode("off");
         setAutosaveDelayMs(1200);
@@ -766,9 +777,9 @@ export function App() {
 
   useEffect(() => {
     if (!settingsLoaded || !isTauriRuntime()) return;
-    const payload: AppSettings = { autosaveMode, autosaveDelayMs, themeId, fontSize, fontFamily, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions };
+    const payload: AppSettings = { autosaveMode, autosaveDelayMs, themeId, fontSize, fontFamily, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions, aiAssistantVisible, aiCharacterId };
     void saveSettings(payload);
-  }, [autosaveMode, autosaveDelayMs, themeId, fontSize, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions, settingsLoaded]);
+  }, [autosaveMode, autosaveDelayMs, themeId, fontSize, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions, aiAssistantVisible, aiCharacterId, settingsLoaded]);
 
   // Re-apply rainbow decorations when toggle, colors, or theme changes
   useEffect(() => {
@@ -1290,6 +1301,8 @@ export function App() {
     }
   };
 
+  const isXlsxPath = (p: string) => /\.(xlsx|xls|xlsm|xlsb|ods)$/i.test(p);
+
   const openFileFromTree = async (
     path: string,
     cursor?: { line: number; column: number; matchLength?: number },
@@ -1297,6 +1310,24 @@ export function App() {
   ) => {
     setSelectedTreePath(path);
     try {
+      if (isXlsxPath(path)) {
+        // Spreadsheet — don't load into Monaco, open as xlsx viewer tab
+        const existing = tabsRef.current.find((t) => t.path === path);
+        if (existing) {
+          setActiveTabId(existing.id);
+          if (switchVisible) setVisibleTabId(existing.id);
+        } else {
+          const newTab: EditorTab = {
+            id: `${Date.now()}-${path}`, path, name: fileName(path),
+            content: "", savedContent: "", dirty: false, mode: "xlsx",
+          };
+          setTabs((prev) => [...prev, newTab]);
+          setActiveTabId(newTab.id);
+          if (switchVisible) setVisibleTabId(newTab.id);
+        }
+        pushRecentFile(path);
+        return;
+      }
       const result = await openFile(path);
       activateOrAddTab(result.path, result.content, switchVisible);
       if (cursor) setPendingCursor(cursor);
@@ -2137,6 +2168,8 @@ export function App() {
                 onHitClick={(hit) => void openSearchHit(hit)}
                 collapsedByDefault={searchCollapsedByDefault}
               />
+            ) : activeTab?.mode === "xlsx" ? (
+              <SpreadsheetView path={activeTab.path} />
             ) : (
               <Editor
                 theme={monacoTheme}
@@ -2155,7 +2188,10 @@ export function App() {
                     horizontal: "visible",
                     verticalScrollbarSize: 8,
                     horizontalScrollbarSize: 8,
+                    useShadows: false,
                   },
+                  overviewRulerLanes: 0,
+                  overviewRulerBorder: false,
                   fontFamily: `${fontFamily}, Consolas, monospace`,
                   fontSize: fontSize,
                   tabSize: tabSize,
@@ -2335,6 +2371,8 @@ export function App() {
           plcRainbowEnabled,
           plcRainbowColors,
           fkeyActions,
+          aiAssistantVisible,
+          aiCharacterId,
         }}
         onSave={applySettings}
         onClose={() => setSettingsOpen(false)}
@@ -2374,6 +2412,12 @@ export function App() {
       />
 
       <Toaster />
+
+      <AIAssistant
+        characterId={aiCharacterId}
+        visible={aiAssistantVisible}
+        onToggle={() => setAiAssistantVisible((v) => !v)}
+      />
     </div>
   );
 }

@@ -23,6 +23,7 @@ export type PlcError = {
 
 type BlockEntry = { keyword: string; line: number };
 
+
 // ── Low-level helpers ─────────────────────────────────────────────────────────
 
 /**
@@ -146,13 +147,19 @@ function validateCondition(
  *   WHILE (condition) WAIT
  * This form does NOT open a loop — no ENDWHILE expected.
  */
+/**
+ * Returns true when the WHILE loop is fully self-contained on a single line —
+ * either the blocking-wait form   WHILE (cond) WAIT
+ * or the inline-loop form         WHILE (cond) ENDWHILE
+ * In both cases no stack entry is needed.
+ */
 function isWhileWaitInline(raw: string): boolean {
   const after = getAfterKeyword(raw, "WHILE");
   if (!after || after[0] !== "(") return false;
   const closeIdx = findClosingParen(after);
   if (closeIdx < 0) return false;
   const tail = after.slice(closeIdx + 1).trim();
-  return /^WAIT\b/i.test(tail);
+  return /^(WAIT|ENDWHILE)\b/i.test(tail);
 }
 
 
@@ -237,6 +244,170 @@ function findInsertBefore(lines: string[], openedAtLine: number, fallbackBeforeL
   return toLine;
 }
 
+/**
+ * Scan the entire source and build a map:  openLine → lastContentLine
+ *
+ * "lastContentLine" = the last meaningful line (non-comment, non-blank,
+ * and NOT a structural closing keyword) that belongs to the body of that
+ * block — i.e. the last line written while this block was innermost.
+ *
+ * Works for both EOF-unclosed blocks AND mid-file mismatches, because it
+ * mirrors the same indent-aware logic as validatePlc.  The code-action
+ * provider uses this map to insert missing closers immediately after the
+ * block's last content, exactly where the user would expect to see them.
+ */
+export type BlockInfo = {
+  /** Last meaningful line belonging to this block (used for insertion point). */
+  lastContent: number;
+  /**
+   * True when no content line with deeper indentation than the opener was found.
+   * Means the block originally had no body → was inline (e.g. WHILE(cond) ENDWHILE).
+   * Quick-fix should append the closer to the opener line, not insert a new line.
+   */
+  inline: boolean;
+};
+
+export function buildBlockMap(source: string): Map<number, BlockInfo> {
+  const map = new Map<number, BlockInfo>(); // openLine → BlockInfo
+  const lines = source.split(/\r?\n/);
+
+  type Entry = { keyword: string; openLine: number; lastContent: number; openIndent: number; hasDeepContent: boolean };
+  const stack: Entry[] = [];
+  let ifdefDepth = 0;
+
+  /**
+   * Pop an entry, record its lastContent in the map, and propagate
+   * `closerLine` (the line of the closing keyword itself) to the parent.
+   *
+   * Why closerLine and not entry.lastContent?
+   * Example:  WHILE { IF { code } ENDIF  ← closerLine=455 }
+   * IF.lastContent = 454 ("code").  If we propagated 454 to WHILE,
+   * the quick-fix would insert ENDWHILE BEFORE ENDIF.
+   * By propagating 455 (ENDIF's own line) WHILE knows its last
+   * meaningful line is 455, so ENDWHILE goes AFTER ENDIF. ✓
+   */
+  const popEntry = (closerLine: number): Entry | undefined => {
+    const entry = stack.pop();
+    if (!entry) return undefined;
+    map.set(entry.openLine, { lastContent: entry.lastContent, inline: !entry.hasDeepContent });
+    if (stack.length > 0) {
+      stack[stack.length - 1].lastContent = Math.max(
+        stack[stack.length - 1].lastContent,
+        closerLine,
+      );
+    }
+    return entry;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = i + 1;
+    const raw = lines[i];
+    const trimmed = raw.trim();
+
+    if (trimmed === "") continue;
+    if (/^\s*#ifn?def\b.*#endif\b/i.test(trimmed)) continue;
+    if (/^\s*#ifn?def\b/i.test(trimmed)) { ifdefDepth++; continue; }
+    if (/^\s*#endif\b/i.test(trimmed))   { ifdefDepth = Math.max(0, ifdefDepth - 1); continue; }
+    if (/^\s*#/.test(trimmed))            continue;
+    if (ifdefDepth > 0)                   continue;
+    if (trimmed.startsWith(";") || trimmed.startsWith("//") ||
+        trimmed.startsWith("/*") || trimmed.startsWith("*")) continue;
+
+    const kw = getFirstToken(raw);
+
+    // Structural openers/content update the top block's lastContent.
+    // Structural closers do NOT update the block they're CLOSING (that's
+    // handled via closerLine in popEntry), but they are content of the PARENT —
+    // that too is handled by popEntry propagating closerLine upward.
+    const isStructuralCloser = kw && /^(ENDIF|ENDI|ENDWHILE|CLOSE)$/i.test(kw);
+    if (!isStructuralCloser && stack.length > 0) {
+      const top = stack[stack.length - 1];
+      top.lastContent = lineNum;
+      // Track whether any content deeper than the opener was seen.
+      if (leadingWs(raw) > top.openIndent) top.hasDeepContent = true;
+    }
+
+    if (!kw) continue;
+
+    switch (kw) {
+      case "IF":
+        stack.push({ keyword: "IF", openLine: lineNum, lastContent: lineNum, openIndent: leadingWs(raw), hasDeepContent: false });
+        break;
+
+      case "WHILE":
+        if (!isWhileWaitInline(raw))
+          stack.push({ keyword: "WHILE", openLine: lineNum, lastContent: lineNum, openIndent: leadingWs(raw), hasDeepContent: false });
+        break;
+
+      case "OPEN":
+        stack.push({ keyword: "OPEN", openLine: lineNum, lastContent: lineNum, openIndent: leadingWs(raw), hasDeepContent: false });
+        break;
+
+      case "ENDI":
+      case "ENDIF": {
+        const curIndent = leadingWs(raw);
+        // Pop inner blocks that are deeper than this ENDIF
+        while (stack.length > 0) {
+          const top = stack[stack.length - 1];
+          if (top.keyword === "OPEN") break;
+          if (leadingWs(lines[top.openLine - 1] ?? "") <= curIndent) break;
+          popEntry(lineNum);
+        }
+        // Pop the matching IF (or WHILE on mismatch)
+        if (stack.length > 0) {
+          const top = stack[stack.length - 1];
+          if (top.keyword === "IF" || top.keyword === "WHILE") {
+            const popped = popEntry(lineNum)!;
+            // On WHILE mismatch, also try to pop the outer IF
+            if (popped.keyword === "WHILE" && stack.length > 0 &&
+                stack[stack.length - 1].keyword === "IF") {
+              popEntry(lineNum);
+            }
+          }
+        }
+        break;
+      }
+
+      case "ENDWHILE": {
+        const curIndent = leadingWs(raw);
+        while (stack.length > 0) {
+          const top = stack[stack.length - 1];
+          if (top.keyword === "OPEN") break;
+          if (leadingWs(lines[top.openLine - 1] ?? "") <= curIndent) break;
+          popEntry(lineNum);
+        }
+        if (stack.length > 0) {
+          const top = stack[stack.length - 1];
+          if (top.keyword === "WHILE" || top.keyword === "IF") {
+            const popped = popEntry(lineNum)!;
+            if (popped.keyword === "IF" && stack.length > 0 &&
+                stack[stack.length - 1].keyword === "WHILE") {
+              popEntry(lineNum);
+            }
+          }
+        }
+        break;
+      }
+
+      case "CLOSE":
+        if (stack.length > 0 && stack[stack.length - 1].keyword === "OPEN")
+          popEntry(lineNum);
+        break;
+    }
+  }
+
+  // Store any remaining unclosed blocks.
+  // Propagate each entry's lastContent to its parent (no closer line here).
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const entry = stack[i];
+    map.set(entry.openLine, { lastContent: entry.lastContent, inline: !entry.hasDeepContent });
+    if (i > 0)
+      stack[i - 1].lastContent = Math.max(stack[i - 1].lastContent, entry.lastContent);
+  }
+
+  return map;
+}
+
 // ── Formatter ─────────────────────────────────────────────────────────────────
 
 const INDENT_OPEN  = /^(IF|WHILE|OPEN)\b/i;
@@ -274,7 +445,9 @@ export function formatPlc(source: string, tabSize = 4): string {
     const token = firstIndentToken(trimmed).toUpperCase();
     if (INDENT_CLOSE.test(token)) depth = Math.max(0, depth - 1);
     out.push(TAB.repeat(depth) + trimmed);
-    if (INDENT_OPEN.test(token) || INDENT_ELSE.test(token)) depth++;
+    // Don't increase depth for inline WHILE — self-closing on the same line.
+    const isInlineWhile = /^WHILE\b/i.test(token) && isWhileWaitInline(trimmed);
+    if ((INDENT_OPEN.test(token) && !isInlineWhile) || INDENT_ELSE.test(token)) depth++;
   }
   return out.join("\n");
 }
@@ -286,6 +459,9 @@ export function validatePlc(source: string): PlcError[] {
   const lines = source.split(/\r?\n/);
   const stack: BlockEntry[] = [];
   let ifdefDepth = 0;
+  // True if the file contains any #ifdef blocks — openers/closers inside them
+  // are skipped, so "without matching" errors on empty stack are suppressed.
+  const hasIfdef = /^\s*#ifn?def\b/im.test(source);
 
   for (let i = 0; i < lines.length; i++) {
     const lineNum = i + 1;
@@ -295,9 +471,11 @@ export function validatePlc(source: string): PlcError[] {
     if (trimmed === "") continue;
 
     // ── Preprocessor tracking ───────────────────────────────────────────────
+    // Single-line form: #ifdef TOKEN  code  #endif — self-contained, depth unchanged.
+    if (/^\s*#ifn?def\b.*#endif\b/i.test(trimmed)) continue;
     if (/^\s*#ifn?def\b/i.test(trimmed)) { ifdefDepth++; continue; }
     if (/^\s*#endif\b/i.test(trimmed))   { ifdefDepth = Math.max(0, ifdefDepth - 1); continue; }
-    if (/^\s*#/.test(trimmed))            continue; // other preprocessor lines
+    if (/^\s*#/.test(trimmed))            continue; // other preprocessor lines (#else, #define …)
 
     // Inside #ifdef: keywords here are compile-time conditional — skip runtime checks
     if (ifdefDepth > 0) continue;
@@ -323,11 +501,9 @@ export function validatePlc(source: string): PlcError[] {
       case "ELSE": {
         const top = stack[stack.length - 1];
         if (!top || top.keyword !== "IF") {
-          errors.push({
-            line: lineNum, col: 1,
-            message: "ELSE without matching IF",
-            severity: "error",
-          });
+          if (!hasIfdef) {
+            errors.push({ line: lineNum, col: 1, message: "ELSE without matching IF", severity: "error" });
+          }
         }
         break;
       }
@@ -353,7 +529,7 @@ export function validatePlc(source: string): PlcError[] {
         }
         const top = stack[stack.length - 1];
         if (!top) {
-          errors.push({ line: lineNum, col: 1, message: "ENDIF without matching IF", severity: "error" });
+          if (!hasIfdef) errors.push({ line: lineNum, col: 1, message: "ENDIF without matching IF", severity: "error" });
         } else if (top.keyword === "IF") {
           stack.pop();
         } else if (top.keyword === "WHILE") {
@@ -366,9 +542,9 @@ export function validatePlc(source: string): PlcError[] {
           stack.pop();
           const next = stack[stack.length - 1];
           if (next?.keyword === "IF") stack.pop();
-          else errors.push({ line: lineNum, col: 1, message: "ENDIF without matching IF", severity: "error" });
+          else if (!hasIfdef) errors.push({ line: lineNum, col: 1, message: "ENDIF without matching IF", severity: "error" });
         } else {
-          errors.push({ line: lineNum, col: 1, message: "ENDIF without matching IF", severity: "error" });
+          if (!hasIfdef) errors.push({ line: lineNum, col: 1, message: "ENDIF without matching IF", severity: "error" });
         }
         break;
       }
@@ -401,7 +577,7 @@ export function validatePlc(source: string): PlcError[] {
         }
         const top = stack[stack.length - 1];
         if (!top) {
-          errors.push({ line: lineNum, col: 1, message: "ENDWHILE without matching WHILE", severity: "error" });
+          if (!hasIfdef) errors.push({ line: lineNum, col: 1, message: "ENDWHILE without matching WHILE", severity: "error" });
         } else if (top.keyword === "WHILE") {
           stack.pop();
         } else if (top.keyword === "IF") {
@@ -414,9 +590,9 @@ export function validatePlc(source: string): PlcError[] {
           stack.pop();
           const next = stack[stack.length - 1];
           if (next?.keyword === "WHILE") stack.pop();
-          else errors.push({ line: lineNum, col: 1, message: "ENDWHILE without matching WHILE", severity: "error" });
+          else if (!hasIfdef) errors.push({ line: lineNum, col: 1, message: "ENDWHILE without matching WHILE", severity: "error" });
         } else {
-          errors.push({ line: lineNum, col: 1, message: "ENDWHILE without matching WHILE", severity: "error" });
+          if (!hasIfdef) errors.push({ line: lineNum, col: 1, message: "ENDWHILE without matching WHILE", severity: "error" });
         }
         break;
       }
@@ -497,96 +673,116 @@ export function registerPlcFormatter(
         endLineNumber: endLine,   endColumn: endCol,
       };
       const needsLeadingNewline = model.getLineContent(endLine).trim().length > 0;
-      const insertAtEof = (kw: string) => (needsLeadingNewline ? `\n${kw}\n` : `${kw}\n`);
 
       const actions: Monaco.languages.CodeAction[] = [];
-      const currentErrors = validatePlc(model.getValue());
+      const source = model.getValue();
+      const currentErrors = validatePlc(source);
+      // Block map: openLine → lastContentLine (for precise insertion point).
+      const blockMap = buildBlockMap(source);
 
-      const unclosedIfCount    = currentErrors.filter((e) => e.message.includes("Unclosed IF block")).length;
-      const unclosedWhileCount = currentErrors.filter((e) => e.message.includes("Unclosed WHILE block")).length;
-      const needsEndwhileBeforeEndif  = currentErrors.filter((e) => e.message.startsWith("ENDWHILE expected before ENDIF"));
-      const needsEndifBeforeEndwhile  = currentErrors.filter((e) => e.message.startsWith("ENDIF expected before ENDWHILE"));
+      // ── Helper: indentation from a model line ──────────────────────────────
+      const indentOf = (lineNum: number): string => {
+        if (lineNum < 1 || lineNum > model.getLineCount()) return "";
+        return model.getLineContent(lineNum).match(/^(\s*)/)?.[1] ?? "";
+      };
 
-      if (unclosedIfCount + unclosedWhileCount > 0) {
-        const closers: string[] = [];
-        for (let n = 0; n < unclosedIfCount;    n++) closers.push("ENDIF");
-        for (let n = 0; n < unclosedWhileCount; n++) closers.push("ENDWHILE");
-        const text = (needsLeadingNewline ? "\n" : "") + closers.join("\n") + "\n";
-        actions.push({
-          title: "Исправить структуру PLC (добавить закрывающие в конец файла)",
-          kind: "quickfix",
-          diagnostics: context.markers,
-          edit: {
-            edits: [{ resource: model.uri, versionId: model.getVersionId(), textEdit: { range: endRange, text } }],
-          },
-          isPreferred: true,
-        });
-      }
+      // ── Helper: build a range + text for inserting a keyword ──────────────
+      // afterLine: insert AFTER this line (1-based). If afterLine >= lineCount,
+      // appends at end-of-file.
+      const makeInsertAfter = (afterLine: number, keyword: string, indent: string) => {
+        if (afterLine >= model.getLineCount()) {
+          // Append at end of file
+          const text = needsLeadingNewline ? `\n${indent}${keyword}\n` : `${indent}${keyword}\n`;
+          return { range: endRange, text };
+        }
+        const il = afterLine + 1;
+        return {
+          range: { startLineNumber: il, startColumn: 1, endLineNumber: il, endColumn: 1 } as Monaco.IRange,
+          text: `${indent}${keyword}\n`,
+        };
+      };
 
+      // ── Helper: append keyword at the END of an existing line ─────────────
+      // Used for inline blocks: WHILE (cond)  →  WHILE (cond) ENDWHILE
+      const makeAppendToLine = (lineNum: number, keyword: string) => {
+        const col = model.getLineMaxColumn(lineNum);
+        return {
+          range: { startLineNumber: lineNum, startColumn: col, endLineNumber: lineNum, endColumn: col } as Monaco.IRange,
+          text: ` ${keyword}`,
+        };
+      };
+
+      // ── Helper: build a range + text for inserting BEFORE a given line ────
+      // Used for mid-file mismatch fixes (insert before the mismatched closer).
+      const makeInsertBefore = (beforeLine: number, keyword: string, indent: string) => {
+        if (beforeLine > model.getLineCount()) {
+          const text = needsLeadingNewline ? `\n${indent}${keyword}\n` : `${indent}${keyword}\n`;
+          return { range: endRange, text };
+        }
+        return {
+          range: { startLineNumber: beforeLine, startColumn: 1, endLineNumber: beforeLine, endColumn: 1 } as Monaco.IRange,
+          text: `${indent}${keyword}\n`,
+        };
+      };
+
+      // ── Order-mismatch fixes (ENDWHILE/ENDIF swapped) ──────────────────────
       const parseInsertBefore = (msg: string): number | null => {
         const m = msg.match(/insert before line\s+(\d+)/i);
         return m ? Number(m[1]) : null;
       };
 
-      for (const err of needsEndwhileBeforeEndif) {
+      for (const err of currentErrors.filter(e => e.message.startsWith("ENDWHILE expected before ENDIF"))) {
         const insertLine = parseInsertBefore(err.message) ?? err.line;
+        const { range, text } = makeInsertBefore(insertLine, "ENDWHILE", "");
         actions.push({
           title: "Вставить ENDWHILE (в корректное место)",
-          kind: "quickfix",
-          diagnostics: context.markers,
-          edit: {
-            edits: [{
-              resource: model.uri, versionId: model.getVersionId(),
-              textEdit: { range: { startLineNumber: insertLine, startColumn: 1, endLineNumber: insertLine, endColumn: 1 }, text: "ENDWHILE\n" },
-            }],
-          },
+          kind: "quickfix", diagnostics: context.markers,
+          edit: { edits: [{ resource: model.uri, versionId: model.getVersionId(), textEdit: { range, text } }] },
           isPreferred: true,
         });
       }
 
-      for (const err of needsEndifBeforeEndwhile) {
+      for (const err of currentErrors.filter(e => e.message.startsWith("ENDIF expected before ENDWHILE"))) {
         const insertLine = parseInsertBefore(err.message) ?? err.line;
+        const { range, text } = makeInsertBefore(insertLine, "ENDIF", "");
         actions.push({
           title: "Вставить ENDIF (в корректное место)",
-          kind: "quickfix",
-          diagnostics: context.markers,
-          edit: {
-            edits: [{
-              resource: model.uri, versionId: model.getVersionId(),
-              textEdit: { range: { startLineNumber: insertLine, startColumn: 1, endLineNumber: insertLine, endColumn: 1 }, text: "ENDIF\n" },
-            }],
-          },
+          kind: "quickfix", diagnostics: context.markers,
+          edit: { edits: [{ resource: model.uri, versionId: model.getVersionId(), textEdit: { range, text } }] },
           isPreferred: true,
         });
       }
 
-      // Per-marker fixes for unclosed blocks: compute smart insertion point
-      // based on indent of the opening keyword, not end-of-file.
-      const lines = model.getValue().split(/\r?\n/);
+      // ── Per-marker quick fix for missing ENDIF / ENDWHILE ─────────────────
       for (const marker of context.markers) {
         if (typeof marker.message !== "string") continue;
+        const isMissingEndif    = marker.message.includes("Missing ENDIF");
+        const isMissingEndwhile = marker.message.includes("Missing ENDWHILE");
+        if (!isMissingEndif && !isMissingEndwhile) continue;
 
-        const isUnclosedIf    = marker.message.includes("Unclosed IF block");
-        const isUnclosedWhile = marker.message.includes("Unclosed WHILE block");
-        if (!isUnclosedIf && !isUnclosedWhile) continue;
+        const keyword = isMissingEndif ? "ENDIF" : "ENDWHILE";
 
-        const keyword = isUnclosedIf ? "ENDIF" : "ENDWHILE";
-        const openLine = marker.startLineNumber; // line where IF/WHILE was opened
+        // Parse opener line from message: "Missing ENDIF for IF opened at line 5"
+        const openerLineMatch = marker.message.match(/opened at line (\d+)/i);
+        const openerLine = openerLineMatch ? Number(openerLineMatch[1]) : null;
+        const indent = indentOf(openerLine ?? 0);
 
-        // Find first line after the opener that returns to the same or lower indent.
-        // That's where the closing keyword should be inserted.
-        const insertLine = findInsertBefore(lines, openLine, model.getLineCount() + 1);
-        const atEof = insertLine > model.getLineCount();
+        // Look up block info from the map built by a full-file scan.
+        const info = openerLine != null ? blockMap.get(openerLine) : undefined;
 
-        const insertRange: Monaco.IRange = atEof
-          ? endRange
-          : { startLineNumber: insertLine, startColumn: 1, endLineNumber: insertLine, endColumn: 1 };
-        const text = atEof ? insertAtEof(keyword) : `${keyword}\n`;
+        // inline=true: block had no indented body → originally single-line form
+        // e.g. WHILE (cond) ENDWHILE where ENDWHILE was deleted.
+        // Restore by appending to the opener line, not inserting a new line.
+        const edit = info == null
+          ? makeInsertBefore(marker.startLineNumber, keyword, indent)
+          : info.inline
+            ? makeAppendToLine(openerLine!, keyword)
+            : makeInsertAfter(info.lastContent, keyword, indent);
 
         actions.push({
           title: `Вставить ${keyword} (в корректное место)`,
           kind: "quickfix", diagnostics: [marker],
-          edit: { edits: [{ resource: model.uri, versionId: model.getVersionId(), textEdit: { range: insertRange, text } }] },
+          edit: { edits: [{ resource: model.uri, versionId: model.getVersionId(), textEdit: { range: edit.range, text: edit.text } }] },
           isPreferred: true,
         });
       }

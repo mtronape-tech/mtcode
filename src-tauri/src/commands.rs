@@ -1,3 +1,4 @@
+use calamine::{open_workbook_auto, Data, Reader};
 use encoding_rs::WINDOWS_1251;
 use notify::{EventKind, RecursiveMode, Watcher};
 use regex::Regex;
@@ -798,6 +799,72 @@ fn default_settings() -> AppSettings {
     plc_rainbow_enabled: true,
     plc_rainbow_colors: Vec::new(),
   }
+}
+
+// ── Excel / xlsx viewer ───────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct XlsxCell {
+  /// Display string (formatted value)
+  pub v: String,
+  /// Raw numeric value if the cell is numeric/date, else null
+  pub n: Option<f64>,
+}
+
+#[derive(Serialize)]
+pub struct XlsxSheet {
+  pub name: String,
+  /// rows × cols matrix of cells
+  pub rows: Vec<Vec<XlsxCell>>,
+  pub col_count: usize,
+}
+
+#[derive(Serialize)]
+pub struct XlsxWorkbook {
+  pub sheets: Vec<XlsxSheet>,
+}
+
+#[tauri::command]
+pub fn get_xlsx_info(path: String) -> Result<XlsxWorkbook, String> {
+  let mut workbook = open_workbook_auto(&path)
+    .map_err(|e| format!("Cannot open workbook: {e}"))?;
+
+  let sheet_names: Vec<String> = workbook.sheet_names().to_vec();
+  let mut sheets: Vec<XlsxSheet> = Vec::new();
+
+  for name in &sheet_names {
+    let range = workbook
+      .worksheet_range(name)
+      .map_err(|e| format!("Cannot read sheet '{name}': {e}"))?;
+
+    let mut rows: Vec<Vec<XlsxCell>> = Vec::new();
+    let mut col_count = 0usize;
+
+    for row in range.rows() {
+      if row.len() > col_count {
+        col_count = row.len();
+      }
+      let cells: Vec<XlsxCell> = row
+        .iter()
+        .map(|cell| match cell {
+          Data::Empty => XlsxCell { v: String::new(), n: None },
+          Data::String(s) => XlsxCell { v: s.clone(), n: None },
+          Data::Float(f) => XlsxCell { v: f.to_string(), n: Some(*f) },
+          Data::Int(i) => XlsxCell { v: i.to_string(), n: Some(*i as f64) },
+          Data::Bool(b) => XlsxCell { v: if *b { "TRUE".into() } else { "FALSE".into() }, n: None },
+          Data::DateTime(dt) => XlsxCell { v: format!("{dt}"), n: None },
+          Data::DateTimeIso(s) => XlsxCell { v: s.clone(), n: None },
+          Data::DurationIso(s) => XlsxCell { v: s.clone(), n: None },
+          Data::Error(e) => XlsxCell { v: format!("{e:?}"), n: None },
+        })
+        .collect();
+      rows.push(cells);
+    }
+
+    sheets.push(XlsxSheet { name: name.clone(), rows, col_count });
+  }
+
+  Ok(XlsxWorkbook { sheets })
 }
 
 fn settings_file_path() -> Result<PathBuf, String> {

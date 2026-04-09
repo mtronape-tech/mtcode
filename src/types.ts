@@ -10,6 +10,8 @@ export type TreeNode = {
   children: TreeNode[];
 };
 
+export type EditorTabMode = "text" | "xlsx";
+
 export type EditorTab = {
   id: string;
   path: string;
@@ -19,6 +21,8 @@ export type EditorTab = {
   dirty: boolean;
   /** Detected or user-set encoding for save (default "utf-8") */
   encoding?: string;
+  /** Viewer mode — "text" for Monaco, "xlsx" for spreadsheet viewer */
+  mode?: EditorTabMode;
 };
 
 export type MenuKey = "file" | "edit" | "search" | "view" | "encoding" | "settings" | "help";

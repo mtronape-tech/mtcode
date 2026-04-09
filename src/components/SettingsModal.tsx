@@ -12,6 +12,7 @@ import {
 import { THEME_FAMILIES } from "../lib/theme";
 import { DEFAULT_RAINBOW_COLORS, DARK_RAINBOW_COLORS, LIGHT_RAINBOW_COLORS } from "../lib/plcRainbowBlocks";
 import { THEMES } from "../lib/theme";
+import { AI_CHARACTERS, type AICharacterId } from "../lib/aiCharacters";
 
 /** Available editor fonts — label shown in dropdown, value is CSS font-family. */
 export const FONTS: { label: string; value: string }[] = [
@@ -38,6 +39,8 @@ export type SettingsDraft = {
   plcRainbowEnabled: boolean;
   plcRainbowColors: string[];
   fkeyActions: (string | null)[];
+  aiAssistantVisible: boolean;
+  aiCharacterId: AICharacterId;
 };
 
 type Props = {
@@ -47,7 +50,7 @@ type Props = {
   onClose: () => void;
 };
 
-type CategoryId = "appearance" | "editor" | "search" | "autosave" | "hotkeys" | "fkeys" | "language";
+type CategoryId = "appearance" | "editor" | "search" | "autosave" | "hotkeys" | "fkeys" | "language" | "ai";
 
 const CATEGORIES: { id: CategoryId; label: string; path: string }[] = [
   { id: "appearance", label: "APPEARANCE", path: "/sys/config/appearance.cfg" },
@@ -57,6 +60,7 @@ const CATEGORIES: { id: CategoryId; label: string; path: string }[] = [
   { id: "hotkeys",    label: "HOTKEYS",    path: "/sys/config/hotkeys.cfg"    },
   { id: "fkeys",      label: "F-KEYS",     path: "/sys/config/fkeys.cfg"      },
   { id: "language",   label: "LANGUAGE",   path: "/sys/config/language.cfg"   },
+  { id: "ai",         label: "AI",         path: "/sys/config/ai.cfg"         },
 ];
 
 // ── Key recorder ─────────────────────────────────────────────────────────────
@@ -604,6 +608,75 @@ export function SettingsModal({ open, initial, onSave, onClose }: Props) {
                     {"> Enable to colorize block keywords by nesting depth"}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ── AI ASSISTANT ─────────────────────────────────────── */}
+            {category === "ai" && (
+              <div className="flex flex-col gap-3">
+                <div className="font-mono text-[10px] font-bold tracking-widest text-muted-foreground select-none mb-1">
+                  // AI ASSISTANT
+                </div>
+
+                <div className={rowCls}>
+                  <span className={labelColCls}>SHOW ASSISTANT</span>
+                  <div className="inline-flex border border-border">
+                    {([true, false] as const).map((val, i) => (
+                      <button
+                        key={String(val)}
+                        type="button"
+                        className={cn(
+                          "font-mono text-[11px] tracking-wider px-3 h-[22px] transition-colors select-none",
+                          i > 0 && "border-l border-border",
+                          draft.aiAssistantVisible === val
+                            ? "bg-accent/30 text-foreground"
+                            : "text-muted-foreground hover:text-foreground hover:bg-accent/10",
+                        )}
+                        onClick={() => set("aiAssistantVisible", val)}
+                      >
+                        {val ? "VISIBLE" : "HIDDEN"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={rowCls}>
+                  <span className={labelColCls}>CHARACTER</span>
+                  <select
+                    className="w-[160px] h-[24px] border border-border bg-transparent text-foreground font-mono text-[11px] px-2 outline-none"
+                    value={draft.aiCharacterId}
+                    onChange={(e) => set("aiCharacterId", e.target.value as AICharacterId)}
+                  >
+                    {Object.entries(AI_CHARACTERS).map(([id, char]) => (
+                      <option key={id} value={id}>
+                        {char.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mt-2 font-mono text-[10px] text-muted-foreground/40 leading-relaxed select-none">
+                  {"> The AI assistant appears in the bottom-right corner"}
+                  <br />
+                  {"> It can be dragged to reposition and hidden via the × button"}
+                  <br />
+                  {"> Shortcuts: Ctrl+Shift+A to toggle visibility"}
+                  <br />
+                  {"> Character recolors automatically to match the current theme"}
+                </div>
+
+                {/* Preview box */}
+                <div className="flex items-center justify-center mt-2 border border-border bg-muted/20 h-[80px]">
+                  <div
+                    className="w-[50px] h-[70px] rounded overflow-hidden"
+                    style={{
+                      backgroundImage: `url(/assets/ai-assistant/${draft.aiCharacterId}-spritesheet.png)`,
+                      backgroundSize: `${AI_CHARACTERS[draft.aiCharacterId].frameWidth * 6}px auto`,
+                      imageRendering: "pixelated",
+                      filter: "none", // Preview without theme filter
+                    }}
+                  />
+                </div>
               </div>
             )}
 

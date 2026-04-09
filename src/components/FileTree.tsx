@@ -246,7 +246,7 @@ export function FileTree({
   return (
     <>
       <aside
-        className="flex-none bg-card flex flex-col gap-2 p-2 min-h-0 overflow-hidden"
+        className="flex-none bg-card flex flex-col gap-2 pl-2 pt-2 pb-2 pr-0 min-h-0 overflow-hidden"
         style={{ width: `${sidebarWidth}px` }}
       >
         {/* Header */}

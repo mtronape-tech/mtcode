@@ -96,6 +96,10 @@ export type AppSettings = {
   plcRainbowColors: string[];
   /** Actions assigned to F1–F10 (null = unassigned) */
   fkeyActions: (string | null)[];
+  /** AI Assistant visibility */
+  aiAssistantVisible: boolean;
+  /** AI Assistant character ID */
+  aiCharacterId: string;
 };
 
 /** Emitted by the Rust file watcher when a file is modified outside the editor. */
@@ -155,6 +159,29 @@ export function moveToTrash(path: string) {
 
 export function createFolder(path: string) {
   return invoke<void>("create_folder", { path });
+}
+
+// ── Excel viewer ─────────────────────────────────────────────────────────────
+
+export type XlsxCell = {
+  /** Display string */
+  v: string;
+  /** Raw numeric value (null for non-numeric cells) */
+  n: number | null;
+};
+
+export type XlsxSheet = {
+  name: string;
+  rows: XlsxCell[][];
+  colCount: number;
+};
+
+export type XlsxWorkbook = {
+  sheets: XlsxSheet[];
+};
+
+export function getXlsxInfo(path: string) {
+  return invoke<XlsxWorkbook>("get_xlsx_info", { path });
 }
 
 export function runKillScript() {
