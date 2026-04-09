@@ -2352,8 +2352,12 @@ export function App() {
         currentLine={parseInt(cursorText.match(/Ln\s*(\d+)/)?.[1] ?? "1", 10)}
         currentCol={parseInt(cursorText.match(/Col\s*(\d+)/)?.[1] ?? "1", 10)}
         maxLine={editorRef.current?.getModel()?.getLineCount() ?? 1}
-        maxCol={editorRef.current?.getModel()?.getLineMaxColumn(
-          parseInt(cursorText.match(/Ln\s*(\d+)/)?.[1] ?? "1", 10)) ?? 1}
+        maxCol={(() => {
+          const model = editorRef.current?.getModel();
+          if (!model) return 1;
+          const ln = Math.min(Math.max(parseInt(cursorText.match(/Ln\s*(\d+)/)?.[1] ?? "1", 10) || 1, 1), model.getLineCount());
+          return model.getLineMaxColumn(ln);
+        })()}
         onGoTo={handleGoTo}
       />
 
