@@ -13,6 +13,7 @@ import { THEME_FAMILIES } from "../lib/theme";
 import { DEFAULT_RAINBOW_COLORS, DARK_RAINBOW_COLORS, LIGHT_RAINBOW_COLORS } from "../lib/plcRainbowBlocks";
 import { THEMES } from "../lib/theme";
 import { AI_CHARACTERS, type AICharacterId } from "../lib/aiCharacters";
+import { checkOllama, OLLAMA_DEFAULT_URL, OLLAMA_DEFAULT_MODEL } from "../services/ollama";
 
 /** Available editor fonts — label shown in dropdown, value is CSS font-family. */
 export const FONTS: { label: string; value: string }[] = [
@@ -41,6 +42,9 @@ export type SettingsDraft = {
   fkeyActions: (string | null)[];
   aiAssistantVisible: boolean;
   aiCharacterId: AICharacterId;
+  ollamaEnabled: boolean;
+  ollamaUrl: string;
+  ollamaModel: string;
 };
 
 type Props = {
@@ -111,6 +115,107 @@ const inputCls = cn(
 const selectCls = cn(inputCls, "pr-1");
 const rowCls = "flex items-center gap-3 min-h-[28px]";
 const labelColCls = "w-[120px] shrink-0 " + labelCls;
+
+// ── Ollama sub-panel ──────────────────────────────────────────────────────────
+const OLLAMA_MODELS = [
+  "qwen2.5-coder:1.5b",
+  "qwen2.5-coder:3b",
+  "qwen2.5-coder:7b",
+  "phi-4-mini",
+  "deepseek-r1:1.5b",
+];
+
+function OllamaSettings({
+  draft,
+  set,
+}: {
+  draft: SettingsDraft;
+  set: <K extends keyof SettingsDraft>(key: K, value: SettingsDraft[K]) => void;
+}) {
+  const [status, setStatus] = useState<"idle" | "checking" | "ok" | "error">("idle");
+
+  const handleCheck = async () => {
+    setStatus("checking");
+    const ok = await checkOllama(draft.ollamaUrl || OLLAMA_DEFAULT_URL);
+    setStatus(ok ? "ok" : "error");
+    setTimeout(() => setStatus("idle"), 3000);
+  };
+
+  return (
+    <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border">
+      <div className="font-mono text-[10px] font-bold tracking-widest text-muted-foreground select-none">
+        // OLLAMA (LOCAL AI)
+      </div>
+
+      <div className={rowCls}>
+        <span className={labelColCls}>AI ANALYSIS</span>
+        <div className="inline-flex border border-border">
+          {([true, false] as const).map((val, i) => (
+            <button
+              key={String(val)}
+              type="button"
+              className={cn(
+                "font-mono text-[11px] tracking-wider px-3 h-[22px] transition-colors select-none",
+                i > 0 && "border-l border-border",
+                draft.ollamaEnabled === val
+                  ? "bg-accent/30 text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/10",
+              )}
+              onClick={() => set("ollamaEnabled", val)}
+            >
+              {val ? "ON" : "OFF"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={rowCls}>
+        <span className={labelColCls}>SERVER URL</span>
+        <input
+          className={cn(inputCls, "flex-1 min-w-0 font-mono text-[11px]")}
+          value={draft.ollamaUrl}
+          placeholder={OLLAMA_DEFAULT_URL}
+          onChange={(e) => set("ollamaUrl", e.target.value)}
+        />
+        <button
+          type="button"
+          className={cn(
+            "shrink-0 w-[40px] font-mono text-[10px] h-[22px] border border-border transition-colors select-none text-center",
+            status === "ok"       && "border-green-500 text-green-500",
+            status === "error"    && "border-destructive text-destructive",
+            status === "checking" && "text-muted-foreground",
+            status === "idle"     && "text-muted-foreground hover:text-foreground hover:bg-accent/10",
+          )}
+          onClick={() => void handleCheck()}
+          disabled={status === "checking"}
+        >
+          {status === "idle"     ? "TEST" : status === "checking" ? "···" : status === "ok" ? "OK" : "FAIL"}
+        </button>
+      </div>
+
+      <div className={rowCls}>
+        <span className={labelColCls}>MODEL</span>
+        <select
+          className={cn(selectCls, "flex-1 min-w-0")}
+          value={draft.ollamaModel}
+          onChange={(e) => set("ollamaModel", e.target.value)}
+        >
+          {OLLAMA_MODELS.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="font-mono text-[10px] text-muted-foreground/40 leading-relaxed select-none">
+        {"> Requires Ollama running locally (ollama.ai)"}
+        <br />
+        {"> Shortcut: Ctrl+Alt+A  |  F-key: assign 'AI' action"}
+        <br />
+        {"> Model must be pulled: ollama pull " + (draft.ollamaModel || OLLAMA_DEFAULT_MODEL)}
+      </div>
+    </div>
+  );
+}
 
 export function SettingsModal({ open, initial, onSave, onClose }: Props) {
   const [draft, setDraft] = useState<SettingsDraft>(initial);
@@ -667,16 +772,29 @@ export function SettingsModal({ open, initial, onSave, onClose }: Props) {
 
                 {/* Preview box */}
                 <div className="flex items-center justify-center mt-2 border border-border bg-muted/20 h-[80px]">
-                  <div
-                    className="w-[50px] h-[70px] rounded overflow-hidden"
-                    style={{
-                      backgroundImage: `url(/assets/ai-assistant/${draft.aiCharacterId}-spritesheet.png)`,
-                      backgroundSize: `${AI_CHARACTERS[draft.aiCharacterId].frameWidth * 6}px auto`,
-                      imageRendering: "pixelated",
-                      filter: "none", // Preview without theme filter
-                    }}
-                  />
+                  {(() => {
+                    const ch = AI_CHARACTERS[draft.aiCharacterId];
+                    // Display at ~62px wide, preserving aspect ratio
+                    const dispW = 62;
+                    const dispH = Math.round(dispW * ch.frameHeight / ch.frameWidth);
+                    return (
+                      <div
+                        style={{
+                          width: dispW,
+                          height: dispH,
+                          backgroundImage: `url(/assets/ai-assistant/${draft.aiCharacterId}-spritesheet.png)`,
+                          backgroundSize: `${dispW * ch.sheetColumns}px auto`,
+                          backgroundRepeat: "no-repeat",
+                          backgroundPosition: "0 0",
+                          imageRendering: "pixelated",
+                        }}
+                      />
+                    );
+                  })()}
                 </div>
+
+                {/* ── OLLAMA ── */}
+                <OllamaSettings draft={draft} set={set} />
               </div>
             )}
 

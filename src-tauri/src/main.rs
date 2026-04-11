@@ -27,6 +27,11 @@ fn main() {
       commands::read_file_encoding,
       commands::save_file_encoding,
       commands::get_xlsx_info,
+      commands::ollama_query,
+      commands::ollama_chat,
+      commands::ollama_check,
+      commands::ollama_is_installed,
+      commands::ollama_install,
     ])
     .run(tauri::generate_context!())
     .expect("error while running mtcode");

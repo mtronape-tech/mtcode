@@ -100,6 +100,12 @@ export type AppSettings = {
   aiAssistantVisible: boolean;
   /** AI Assistant character ID */
   aiCharacterId: string;
+  /** Enable local Ollama AI analysis */
+  ollamaEnabled: boolean;
+  /** Ollama server URL */
+  ollamaUrl: string;
+  /** Ollama model name */
+  ollamaModel: string;
 };
 
 /** Emitted by the Rust file watcher when a file is modified outside the editor. */

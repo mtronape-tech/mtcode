@@ -867,6 +867,249 @@ pub fn get_xlsx_info(path: String) -> Result<XlsxWorkbook, String> {
   Ok(XlsxWorkbook { sheets })
 }
 
+// ── Ollama proxy ─────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize)]
+pub struct OllamaRequest {
+  pub url: String,
+  pub model: String,
+  pub prompt: String,
+}
+
+/// Proxy an Ollama /api/generate request through Rust to avoid webview CSP restrictions.
+#[tauri::command]
+pub async fn ollama_query(req: OllamaRequest) -> Result<String, String> {
+  let endpoint = format!("{}/api/generate", req.url.trim_end_matches('/'));
+
+  let body = serde_json::json!({
+    "model": req.model,
+    "prompt": req.prompt,
+    "stream": false,
+  });
+
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(120))
+    .build()
+    .map_err(|e| e.to_string())?;
+
+  let res = client
+    .post(&endpoint)
+    .json(&body)
+    .send()
+    .await
+    .map_err(|e| format!("Connection error: {e}"))?;
+
+  if !res.status().is_success() {
+    return Err(format!("Ollama HTTP {}", res.status()));
+  }
+
+  let data: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+  let response = data["response"]
+    .as_str()
+    .unwrap_or("")
+    .trim()
+    .to_string();
+
+  Ok(response)
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ChatMessage {
+  pub role: String,    // "system" | "user" | "assistant"
+  pub content: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct OllamaChatRequest {
+  pub url: String,
+  pub model: String,
+  pub messages: Vec<ChatMessage>,
+}
+
+#[tauri::command]
+pub async fn ollama_chat(req: OllamaChatRequest) -> Result<String, String> {
+  let endpoint = format!("{}/api/chat", req.url.trim_end_matches('/'));
+
+  let body = serde_json::json!({
+    "model": req.model,
+    "messages": req.messages,
+    "stream": false,
+  });
+
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(120))
+    .build()
+    .map_err(|e| e.to_string())?;
+
+  let res = client
+    .post(&endpoint)
+    .json(&body)
+    .send()
+    .await
+    .map_err(|e| format!("Connection error: {e}"))?;
+
+  if !res.status().is_success() {
+    return Err(format!("Ollama HTTP {}", res.status()));
+  }
+
+  let data: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+  let response = data["message"]["content"]
+    .as_str()
+    .unwrap_or("")
+    .trim()
+    .to_string();
+
+  Ok(response)
+}
+
+/// Check if Ollama is reachable (GET /api/tags).
+#[tauri::command]
+pub async fn ollama_check(url: String) -> bool {
+  let endpoint = format!("{}/api/tags", url.trim_end_matches('/'));
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(4))
+    .build();
+
+  match client {
+    Ok(c) => c.get(&endpoint).send().await.map(|r| r.status().is_success()).unwrap_or(false),
+    Err(_) => false,
+  }
+}
+
+// ── Ollama auto-install ───────────────────────────────────────────────────────
+
+fn ollama_exe_path() -> Option<PathBuf> {
+  // Check user-local install path (no admin rights needed)
+  if let Ok(local) = std::env::var("LOCALAPPDATA") {
+    let p = PathBuf::from(local).join("Programs").join("Ollama").join("ollama.exe");
+    if p.exists() { return Some(p); }
+  }
+  // Check PATH via `where ollama`
+  if let Ok(out) = std::process::Command::new("where").arg("ollama").output() {
+    if out.status.success() {
+      let path = String::from_utf8_lossy(&out.stdout).trim().lines().next()
+        .map(|l| PathBuf::from(l.trim()));
+      if let Some(p) = path { if p.exists() { return Some(p); } }
+    }
+  }
+  None
+}
+
+/// Returns true if the ollama binary is present on this machine.
+#[tauri::command]
+pub fn ollama_is_installed() -> bool {
+  ollama_exe_path().is_some()
+}
+
+#[derive(Clone, Serialize)]
+pub struct OllamaSetupEvent {
+  pub stage: String,   // "downloading" | "installing" | "pulling" | "done" | "error"
+  pub message: String,
+  pub percent: u8,
+}
+
+/// Install Ollama from bundled resources and register the bundled model GGUF.
+/// No internet connection required — all files are included in the app bundle.
+#[tauri::command]
+pub async fn ollama_install(
+  window: tauri::Window,
+  app_handle: tauri::AppHandle,
+  model: String,
+) -> Result<(), String> {
+  let emit = |stage: &str, msg: &str, pct: u8| {
+    let _ = window.emit("ollama-setup-progress", OllamaSetupEvent {
+      stage: stage.into(),
+      message: msg.into(),
+      percent: pct,
+    });
+  };
+
+  // ── Resolve bundled resource paths ────────────────────────────────────────
+  let res_dir = app_handle
+    .path_resolver()
+    .resource_dir()
+    .ok_or("Cannot locate app resource directory")?;
+
+  let installer = res_dir.join("OllamaSetup.exe");
+  let gguf      = res_dir.join("model.gguf");
+
+  if !installer.exists() {
+    return Err(format!("Bundled installer not found: {}", installer.display()));
+  }
+  if !gguf.exists() {
+    return Err(format!("Bundled model not found: {}", gguf.display()));
+  }
+
+  // Stub check: in dev builds resources are 1-byte placeholders
+  let installer_size = std::fs::metadata(&installer).map(|m| m.len()).unwrap_or(0);
+  if installer_size < 1024 {
+    return Err("OllamaSetup.exe is a dev stub. Run 'node scripts/prepare-ollama.mjs' to download real files.".into());
+  }
+
+  // ── 1. Install Ollama silently (NSIS /S, installs to LOCALAPPDATA) ─────────
+  emit("installing", "Installing Ollama…", 15);
+
+  let status = std::process::Command::new(&installer)
+    .arg("/S")
+    .status()
+    .map_err(|e| format!("Installer launch failed: {e}"))?;
+
+  if !status.success() {
+    return Err(format!("Installer exited with code {:?}", status.code()));
+  }
+
+  // ── 2. Wait for the ollama binary to appear (up to 20 s) ──────────────────
+  emit("installing", "Waiting for Ollama service…", 40);
+
+  let ollama = {
+    let mut found = None;
+    for _ in 0..20 {
+      tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+      if let Some(p) = ollama_exe_path() { found = Some(p); break; }
+    }
+    found.ok_or("Ollama binary not found after install")?
+  };
+
+  // ── 3. Ensure service is running ──────────────────────────────────────────
+  let http = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(3))
+    .build().map_err(|e| e.to_string())?;
+
+  let mut service_up = false;
+  for _ in 0..15 {
+    if http.get("http://localhost:11434/api/tags").send().await
+      .map(|r| r.status().is_success()).unwrap_or(false)
+    {
+      service_up = true;
+      break;
+    }
+    let _ = std::process::Command::new(&ollama).arg("serve").spawn();
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+  }
+  if !service_up {
+    return Err("Ollama service did not start within 15 seconds".into());
+  }
+
+  // ── 4. Register model from bundled GGUF via `ollama create` ───────────────
+  emit("pulling", "Registering AI model from bundle…", 60);
+
+  let modelfile_content = format!("FROM {}", gguf.to_string_lossy());
+  let modelfile_path    = std::env::temp_dir().join("MTCode_Modelfile");
+  std::fs::write(&modelfile_path, modelfile_content).map_err(|e| e.to_string())?;
+
+  let create_status = std::process::Command::new(&ollama)
+    .args(["create", &model, "-f", modelfile_path.to_str().unwrap_or("")])
+    .status()
+    .map_err(|e| format!("ollama create failed: {e}"))?;
+
+  if !create_status.success() {
+    return Err(format!("ollama create {model} failed"));
+  }
+
+  emit("done", "AI is ready!", 100);
+  Ok(())
+}
+
 fn settings_file_path() -> Result<PathBuf, String> {
   let base = std::env::var_os("APPDATA")
     .map(PathBuf::from)

@@ -1,7 +1,7 @@
 {
     "build": {
-        "beforeDevCommand": "npm run dev",
-        "beforeBuildCommand": "npm run build",
+        "beforeDevCommand": "node scripts/prepare-ollama.mjs --stubs && npm run dev",
+        "beforeBuildCommand": "node scripts/prepare-ollama.mjs && npm run build",
         "devPath": "http://localhost:1420",
         "distDir": "../dist"
     },
@@ -37,7 +37,9 @@
             ],
             "identifier": "com.mtcode.app",
             "resources": [
-                "../kill.bat"
+                "../kill.bat",
+                "../ollama-resources/OllamaSetup.exe",
+                "../ollama-resources/model.gguf"
             ],
             "windows": {
                 "webviewInstallMode": {

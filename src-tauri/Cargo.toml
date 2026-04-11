@@ -18,6 +18,8 @@ encoding_rs = "0.8"
 notify = "6"
 regex = "1"
 calamine = { version = "0.24", features = ["dates"] }
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1", features = ["time"] }
 
 [features]
 default = ["custom-protocol"]

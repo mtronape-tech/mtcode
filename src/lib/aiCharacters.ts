@@ -14,23 +14,29 @@ export interface AICharacterStyle {
 
 export const AI_CHARACTERS: Record<AICharacterId, {
   name: string;
-  // Default sprite dimensions (adjust to match your sprite sheet)
+  /** Width of one frame as displayed (px) */
   frameWidth: number;
+  /** Height of one frame as displayed (px) */
   frameHeight: number;
-  // Animation frame indices in the sprite sheet
+  /** Number of frames per row in the sprite sheet */
+  sheetColumns: number;
   animations: Record<AnimationState, { frames: number[]; loop: boolean; speed: number }>;
 }> = {
   clippy: {
     name: "Clippy",
-    frameWidth: 70,
-    frameHeight: 96,
+    // Spritesheet: 2729×3813, 22 cols × 41 rows, natural frame size 124×93
+    frameWidth: 124,
+    frameHeight: 93,
+    sheetColumns: 22,
     animations: {
-      idle:    { frames: [0],      loop: false, speed: 0 },
-      wave:    { frames: [1, 2, 3, 2], loop: true, speed: 200 },
-      think:   { frames: [4, 5],   loop: true, speed: 600 },
-      point:   { frames: [6],      loop: false, speed: 0 },
-      blink:   { frames: [7],      loop: false, speed: 150 },
-      alert:   { frames: [8, 9],   loop: true, speed: 300 },
+      // Frame indices are (row * 22 + col) in the spritesheet.
+      // TODO: map precise indices once the full animation list is known.
+      idle:  { frames: [0],            loop: false, speed: 0 },
+      blink: { frames: [1],            loop: false, speed: 150 },
+      wave:  { frames: [2, 3, 4, 3],   loop: true,  speed: 200 },
+      think: { frames: [5, 6],         loop: true,  speed: 600 },
+      point: { frames: [7],            loop: false, speed: 0 },
+      alert: { frames: [8, 9],         loop: true,  speed: 300 },
     },
   },
 };

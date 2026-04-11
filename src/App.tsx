@@ -1,5 +1,6 @@
 import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import type { editor as MonacoEditor, IRange } from "monaco-editor";
+import { invoke } from "@tauri-apps/api/tauri";
 import { open, save } from "@tauri-apps/api/dialog";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -49,6 +50,8 @@ import { CommandPalette, type CommandPaletteItem } from "./components/CommandPal
 import { UnsavedChangesDialog } from "./components/UnsavedChangesDialog";
 import { Toaster, toast } from "./components/Toaster";
 import { AIAssistant } from "./components/AIAssistant";
+import { OllamaSetupDialog } from "./components/OllamaSetupDialog";
+import { queryOllama, buildAnalyzePrompt, chatOllama, buildSystemPrompt, type ValidatorError, type ChatMessage, OLLAMA_DEFAULT_URL, OLLAMA_DEFAULT_MODEL } from "./services/ollama";
 import SpreadsheetView from "./components/SpreadsheetView";
 import { useTheme } from "./context/ThemeContext";
 import { isValidThemeId, THEMES } from "./lib/theme";
@@ -207,9 +210,27 @@ export function App() {
   const [aiAssistantVisible, setAiAssistantVisible] = useState<boolean>(false);
   const [aiCharacterId, setAiCharacterId] = useState<"clippy">("clippy");
 
+  // Ollama state
+  const [ollamaEnabled, setOllamaEnabled] = useState(false);
+  const [ollamaUrl, setOllamaUrl] = useState(OLLAMA_DEFAULT_URL);
+  const [ollamaModel, setOllamaModel] = useState(OLLAMA_DEFAULT_MODEL);
+  const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [aiMessage, setAiMessage] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatAnalyzing, setChatAnalyzing] = useState(false);
+  const [showOllamaSetup, setShowOllamaSetup] = useState(false);
+
+  // Refs so Monaco mount closure always sees current values
+  const ollamaEnabledRef  = useRef(false);
+  const handleAiAnalyzeRef = useRef<(() => void) | null>(null);
+  // Always-current ref for chat messages — avoids stale closure in handleSendMessage
+  const chatMessagesRef = useRef<ChatMessage[]>([]);
+  chatMessagesRef.current = chatMessages;
+
   // Always-current ref — avoids stale closure in the keydown useEffect (deps=[])
   const hotkeysRef = useRef(hotkeys);
   hotkeysRef.current = hotkeys;
+  ollamaEnabledRef.current = ollamaEnabled;
 
   // Always-current refs for rainbow (avoid stale closures in Monaco callbacks)
   // Effective palette: user custom if length==10, else auto based on theme mode
@@ -689,6 +710,9 @@ export function App() {
     }
     setAiAssistantVisible(draft.aiAssistantVisible);
     setAiCharacterId(draft.aiCharacterId);
+    setOllamaEnabled(draft.ollamaEnabled);
+    setOllamaUrl(draft.ollamaUrl || OLLAMA_DEFAULT_URL);
+    setOllamaModel(draft.ollamaModel || OLLAMA_DEFAULT_MODEL);
   };
 
   // Keep action refs current every render (safe pattern for stable callbacks)
@@ -766,6 +790,9 @@ export function App() {
         }
         if (settings.aiAssistantVisible !== undefined) setAiAssistantVisible(settings.aiAssistantVisible);
         if (settings.aiCharacterId) setAiCharacterId(settings.aiCharacterId as "clippy");
+        if (settings.ollamaEnabled !== undefined) setOllamaEnabled(settings.ollamaEnabled);
+        if (settings.ollamaUrl) setOllamaUrl(settings.ollamaUrl);
+        if (settings.ollamaModel) setOllamaModel(settings.ollamaModel);
       } catch {
         setAutosaveMode("off");
         setAutosaveDelayMs(1200);
@@ -775,11 +802,19 @@ export function App() {
     })();
   }, []);
 
+  // Check if Ollama is installed; show setup dialog if not
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    invoke<boolean>("ollama_is_installed").then((installed) => {
+      if (!installed) setShowOllamaSetup(true);
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!settingsLoaded || !isTauriRuntime()) return;
-    const payload: AppSettings = { autosaveMode, autosaveDelayMs, themeId, fontSize, fontFamily, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions, aiAssistantVisible, aiCharacterId };
+    const payload: AppSettings = { autosaveMode, autosaveDelayMs, themeId, fontSize, fontFamily, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions, aiAssistantVisible, aiCharacterId, ollamaEnabled, ollamaUrl, ollamaModel };
     void saveSettings(payload);
-  }, [autosaveMode, autosaveDelayMs, themeId, fontSize, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions, aiAssistantVisible, aiCharacterId, settingsLoaded]);
+  }, [autosaveMode, autosaveDelayMs, themeId, fontSize, tabSize, wordWrap, hotkeys, searchCollapsedByDefault, plcRainbowEnabled, plcRainbowColors, fkeyActions, aiAssistantVisible, aiCharacterId, ollamaEnabled, ollamaUrl, ollamaModel, settingsLoaded]);
 
   // Re-apply rainbow decorations when toggle, colors, or theme changes
   useEffect(() => {
@@ -1043,6 +1078,7 @@ export function App() {
       if (!typingInField && matchesBinding(event, hk.closeTab))      { event.preventDefault(); if (activeTabId) requestCloseTab(activeTabId); }
       if (!typingInField && matchesBinding(event, hk.findInFile))    { event.preventDefault(); openFindPanel("find", editorSelection()); }
       if (!typingInField && matchesBinding(event, hk.replaceInFile)) { event.preventDefault(); openFindPanel("replace", editorSelection()); }
+      if (!typingInField && matchesBinding(event, hk.aiAnalyze))    { event.preventDefault(); void handleAiAnalyze(); }
 
       // F-key bar actions (bare F1–F10, no modifiers)
       if (!event.ctrlKey && !event.altKey && !event.shiftKey && /^F\d+$/.test(key)) {
@@ -1746,15 +1782,29 @@ export function App() {
       );
     }
 
-    // Re-run on content change (debounced 200 ms)
+    // Re-run on content change (debounced 200 ms for rainbow, 4 s for AI)
     let rainbowTimer: ReturnType<typeof setTimeout> | null = null;
+    let aiTimer: ReturnType<typeof setTimeout> | null = null;
     editor.onDidChangeModelContent(() => {
+      // Rainbow decorations
       if (rainbowTimer) clearTimeout(rainbowTimer);
       rainbowTimer = setTimeout(() => {
         const model = editor.getModel();
         if (!model || model.isDisposed()) return;
         updateRainbowDecorations(editor);
       }, 200);
+
+      // AI auto-analysis: fire 4 s after last change, only if Ollama enabled + PLC + has errors
+      if (aiTimer) clearTimeout(aiTimer);
+      aiTimer = setTimeout(() => {
+        const model = editor.getModel();
+        if (!model || model.isDisposed()) return;
+        if (!ollamaEnabledRef.current) return;
+        if (model.getLanguageId() !== PLC_LANGUAGE_ID) return;
+        const errors = validatePlc(model.getValue());
+        if (errors.length === 0) return;
+        handleAiAnalyzeRef.current?.();
+      }, 4000);
     });
 
     // Re-run when the model is swapped (tab switch)
@@ -1864,6 +1914,83 @@ export function App() {
   };
 
 
+  // Keep ref in sync so Monaco closure can call it without stale capture
+  handleAiAnalyzeRef.current = () => { void handleAiAnalyze(); };
+
+  const handleAiAnalyze = async () => {
+    if (!ollamaEnabled) {
+      toast.error("AI analysis is disabled. Enable Ollama in Settings → AI.");
+      return;
+    }
+    const code = editorRef.current?.getModel()?.getValue();
+    if (!code?.trim()) {
+      toast("No code to analyze.");
+      return;
+    }
+    // Run validator directly on the code — don't rely on Monaco markers state
+    const validatorErrors: ValidatorError[] = validatePlc(code).map((e) => ({
+      line: e.line,
+      message: e.message,
+      severity: e.severity,
+    }));
+
+    // Show Clippy if hidden
+    if (!aiAssistantVisible) setAiAssistantVisible(true);
+
+    setAiAnalyzing(true);
+    setChatAnalyzing(true);
+    try {
+      const result = await queryOllama(
+        { url: ollamaUrl, model: ollamaModel },
+        buildAnalyzePrompt(code, validatorErrors),
+      );
+      setAiMessage(result);
+      setChatMessages((prev) => [...prev, { role: "assistant", content: result }]);
+    } catch (err: unknown) {
+      const errMsg = `Error: ${(err as Error)?.message ?? "could not reach Ollama"}. Make sure it is running and the model is pulled.`;
+      setAiMessage(errMsg);
+      setChatMessages((prev) => [...prev, { role: "assistant", content: errMsg }]);
+    } finally {
+      setAiAnalyzing(false);
+      setChatAnalyzing(false);
+    }
+  };
+
+  const handleSendMessage = async (text: string) => {
+    if (!ollamaEnabled || chatAnalyzing) return;
+
+    const code = editorRef.current?.getModel()?.getValue() ?? "";
+
+    // Build messages: system + history + new user message
+    const systemMsg: ChatMessage = { role: "system", content: buildSystemPrompt(code) };
+    const userMsg: ChatMessage = { role: "user", content: text };
+
+    setChatMessages((prev) => [...prev, userMsg]);
+    setChatAnalyzing(true);
+
+    if (!aiAssistantVisible) setAiAssistantVisible(true);
+
+    try {
+      // Include full history for context (exclude system messages)
+      const history = chatMessagesRef.current.filter((m) => m.role !== "system");
+      const result = await chatOllama(
+        { url: ollamaUrl, model: ollamaModel },
+        [systemMsg, ...history, userMsg],
+      );
+      setChatMessages((prev) => [...prev, { role: "assistant", content: result }]);
+    } catch (err: unknown) {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Error: ${(err as Error)?.message ?? "could not reach Ollama"}`,
+        },
+      ]);
+    } finally {
+      setChatAnalyzing(false);
+    }
+  };
+
   const executeAction = (action: string) => {
     // Defer state updates so Monaco finishes its current event cycle before React re-renders
     const defer = (fn: () => void) => setTimeout(fn, 0);
@@ -1889,6 +2016,7 @@ export function App() {
       case "wordWrap":        setWordWrap((w) => (w === "off" ? "on" : "off")); break;
       case "killScript":      defer(() => setKillDialogOpen(true)); break;
       case "beautify":        defer(() => editorRef.current?.getAction("editor.action.formatDocument")?.run()); break;
+      case "aiAnalyze":       void handleAiAnalyze(); break;
     }
   };
 
@@ -2373,6 +2501,9 @@ export function App() {
           fkeyActions,
           aiAssistantVisible,
           aiCharacterId,
+          ollamaEnabled,
+          ollamaUrl,
+          ollamaModel,
         }}
         onSave={applySettings}
         onClose={() => setSettingsOpen(false)}
@@ -2417,7 +2548,23 @@ export function App() {
         characterId={aiCharacterId}
         visible={aiAssistantVisible}
         onToggle={() => setAiAssistantVisible((v) => !v)}
+        analyzing={aiAnalyzing || chatAnalyzing}
+        chatMessages={chatMessages}
+        chatAnalyzing={chatAnalyzing}
+        onSendMessage={(text) => void handleSendMessage(text)}
+        onClearChat={() => setChatMessages([])}
       />
+
+      {showOllamaSetup && (
+        <OllamaSetupDialog
+          model={ollamaModel}
+          onDone={() => {
+            setShowOllamaSetup(false);
+            setOllamaEnabled(true);
+          }}
+          onSkip={() => setShowOllamaSetup(false)}
+        />
+      )}
     </div>
   );
 }
