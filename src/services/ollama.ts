@@ -5,15 +5,19 @@
 
 import { invoke } from "@tauri-apps/api/tauri";
 
-export const OLLAMA_DEFAULT_URL   = "http://localhost:11434";
+export const OLLAMA_DEFAULT_URL   = "http://127.0.0.1:11434";
 export const OLLAMA_DEFAULT_MODEL = "qwen2.5-coder:1.5b";
 
-/** Check if Ollama is reachable (proxied via Rust). */
-export async function checkOllama(url: string): Promise<boolean> {
+/**
+ * Check if Ollama is reachable.
+ * Returns { ok: true, message } on success, { ok: false, message } on failure.
+ */
+export async function checkOllama(url: string): Promise<{ ok: boolean; message: string }> {
   try {
-    return await invoke<boolean>("ollama_check", { url });
-  } catch {
-    return false;
+    const message = await invoke<string>("ollama_check", { url });
+    return { ok: true, message };
+  } catch (e) {
+    return { ok: false, message: String(e) };
   }
 }
 

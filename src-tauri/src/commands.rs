@@ -812,6 +812,7 @@ pub struct XlsxCell {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct XlsxSheet {
   pub name: String,
   /// rows × cols matrix of cells
@@ -963,16 +964,47 @@ pub async fn ollama_chat(req: OllamaChatRequest) -> Result<String, String> {
 }
 
 /// Check if Ollama is reachable (GET /api/tags).
+/// Returns Ok(models_list) on success, Err(reason) on failure.
 #[tauri::command]
-pub async fn ollama_check(url: String) -> bool {
+pub async fn ollama_check(url: String) -> Result<String, String> {
   let endpoint = format!("{}/api/tags", url.trim_end_matches('/'));
-  let client = reqwest::Client::builder()
-    .timeout(std::time::Duration::from_secs(4))
-    .build();
 
-  match client {
-    Ok(c) => c.get(&endpoint).send().await.map(|r| r.status().is_success()).unwrap_or(false),
-    Err(_) => false,
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(5))
+    .build()
+    .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+
+  let res = client
+    .get(&endpoint)
+    .send()
+    .await
+    .map_err(|e| {
+      if e.is_connect() {
+        format!("Нет соединения с {url} — Ollama не запущена или неверный адрес")
+      } else if e.is_timeout() {
+        format!("Таймаут при подключении к {url}")
+      } else {
+        format!("Ошибка соединения: {e}")
+      }
+    })?;
+
+  if !res.status().is_success() {
+    return Err(format!("Ollama ответила HTTP {}", res.status()));
+  }
+
+  // Parse model list from /api/tags response
+  let data: serde_json::Value = res.json().await.map_err(|e| format!("Неверный ответ: {e}"))?;
+  let models: Vec<String> = data["models"]
+    .as_array()
+    .unwrap_or(&vec![])
+    .iter()
+    .filter_map(|m| m["name"].as_str().map(|s| s.to_string()))
+    .collect();
+
+  if models.is_empty() {
+    Ok("Подключено. Моделей нет — выполни: ollama pull qwen2.5-coder:1.5b".into())
+  } else {
+    Ok(format!("Подключено. Модели: {}", models.join(", ")))
   }
 }
 

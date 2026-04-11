@@ -22,7 +22,15 @@ export default function SpreadsheetView({ path }: Props) {
     setWorkbook(null);
     setActiveSheet(0);
     getXlsxInfo(path)
-      .then((wb) => { setWorkbook(wb); setLoading(false); })
+      .then((wb) => {
+        // Sanity-check: log workbook structure in dev so we can see what arrived
+        if (import.meta.env.DEV) {
+          const info = wb.sheets.map((s) => `${s.name}: ${s.rows.length}r × ${s.colCount}c`).join(", ");
+          console.log("[SpreadsheetView] loaded:", info, wb);
+        }
+        setWorkbook(wb);
+        setLoading(false);
+      })
       .catch((e) => { setError(String(e)); setLoading(false); });
   }, [path]);
 
@@ -56,7 +64,13 @@ export default function SpreadsheetView({ path }: Props) {
     return s;
   };
 
-  const colCount = sheet?.colCount ?? 0;
+  // colCount comes from Rust (camelCase via serde rename_all).
+  // Fallback: derive from actual row data in case serde naming ever drifts.
+  const colCount = sheet
+    ? (sheet.colCount > 0
+        ? sheet.colCount
+        : Math.max(0, ...sheet.rows.map((r) => r.length)))
+    : 0;
   const cols = Array.from({ length: colCount }, (_, i) => i);
 
   return (

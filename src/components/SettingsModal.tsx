@@ -133,12 +133,15 @@ function OllamaSettings({
   set: <K extends keyof SettingsDraft>(key: K, value: SettingsDraft[K]) => void;
 }) {
   const [status, setStatus] = useState<"idle" | "checking" | "ok" | "error">("idle");
+  const [statusMsg, setStatusMsg] = useState<string>("");
 
   const handleCheck = async () => {
     setStatus("checking");
-    const ok = await checkOllama(draft.ollamaUrl || OLLAMA_DEFAULT_URL);
-    setStatus(ok ? "ok" : "error");
-    setTimeout(() => setStatus("idle"), 3000);
+    setStatusMsg("");
+    const result = await checkOllama(draft.ollamaUrl || OLLAMA_DEFAULT_URL);
+    setStatus(result.ok ? "ok" : "error");
+    setStatusMsg(result.message);
+    setTimeout(() => { setStatus("idle"); setStatusMsg(""); }, 6000);
   };
 
   return (
@@ -192,6 +195,15 @@ function OllamaSettings({
           {status === "idle"     ? "TEST" : status === "checking" ? "···" : status === "ok" ? "OK" : "FAIL"}
         </button>
       </div>
+
+      {statusMsg && (
+        <div className={cn(
+          "font-mono text-[10px] leading-snug px-1 select-none",
+          status === "ok" ? "text-green-500" : "text-destructive",
+        )}>
+          {statusMsg}
+        </div>
+      )}
 
       <div className={rowCls}>
         <span className={labelColCls}>MODEL</span>
